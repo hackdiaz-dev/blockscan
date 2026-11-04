@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -81,9 +82,10 @@ class HttpCheckApi(
     override suspend fun check(target: String): String =
         getText(url("api", "v1", "check", query = "target" to target), "application/json")
 
+    @OptIn(InternalCoroutinesApi::class)
     override fun probe(id: String): Flow<ProbeEvent> = flow {
         val call = sse.newCall(request(url("api", "v1", "probe", id), "text/event-stream"))
-        val handle = currentCoroutineContext()[Job]?.invokeOnCompletion { call.cancel() }
+        val handle = currentCoroutineContext()[Job]?.invokeOnCompletion(onCancelling = true) { call.cancel() }
         try {
             val resp = try {
                 withContext(Dispatchers.IO) { call.execute() }

@@ -178,6 +178,7 @@ private fun JobPanel(jobId: Long, onNew: (() -> Unit)?, onOpenItem: (Long, Strin
     val filter by vm.filter.collectAsStateWithLifecycle()
     val search by vm.search.collectAsStateWithLifecycle()
     val sort by vm.sort.collectAsStateWithLifecycle()
+    val exportMessage by vm.exportMessage.collectAsStateWithLifecycle()
     val j = job
     val mine = engine.jobId == jobId
 
@@ -228,6 +229,7 @@ private fun JobPanel(jobId: Long, onNew: (() -> Unit)?, onOpenItem: (Long, Strin
                 StatTile(counts.errors.toString(), "ошибок", Modifier.weight(1f))
             }
         }
+        exportMessage?.let { message -> item { Text(message, color = if (message.startsWith("Ошибка")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) } }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 StatTile(counts.notBlocked.toString(), "не заблок.", Modifier.weight(1f))

@@ -100,7 +100,7 @@ class ParsersTest {
         assertEquals(429, err.code)
         assertEquals("Too Many Requests", err.message)
         assertNull(ProbeParser.mapEvent("ping", "{}"))
-        assertNull(ProbeParser.mapEvent("result", "not json"))
+        assertTrue(ProbeParser.mapEvent("result", "not json") is ProbeEvent.Malformed)
         val plain = ProbeParser.mapEvent("error", "boom") as ProbeEvent.ServerError
         assertNull(plain.code)
     }

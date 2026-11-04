@@ -63,13 +63,13 @@ class ScanEngine(
         }
     }
 
-    fun start(jobId: Long) {
+    fun start(jobId: Long): Boolean {
         if (workers?.isActive == true) {
             if (activeJobId == jobId) resume(jobId)
-            return
+            return activeJobId == jobId
         }
-        val job = store.getJob(jobId) ?: return
-        if (job.state == JobState.STOPPED || job.state == JobState.FINISHED) return
+        val job = store.getJob(jobId) ?: return false
+        if (job.state == JobState.STOPPED || job.state == JobState.FINISHED) return false
         activeJobId = jobId
         store.resetRunning(jobId)
         store.setJobState(jobId, JobState.RUNNING)
@@ -81,6 +81,7 @@ class ScanEngine(
             coroutineScope { repeat(n) { launch { workerLoop(jobId) } } }
             finish(jobId)
         }
+        return true
     }
 
     fun resume(jobId: Long) {
@@ -106,8 +107,9 @@ class ScanEngine(
 
     /** Жёсткая остановка: текущие запросы отменяются, адреса возвращаются в очередь, задача закрывается. */
     fun stop(jobId: Long) {
-        activeJobId = jobId
+        if (activeJobId != jobId) return
         scope.launch {
+            if (activeJobId != jobId) return@launch
             workers?.cancelAndJoin()
             workers = null
             running.clear()

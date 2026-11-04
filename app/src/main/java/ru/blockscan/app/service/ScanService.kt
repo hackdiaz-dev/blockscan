@@ -41,8 +41,7 @@ class ScanService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 goForeground(notification(engine.state.value, jobId, starting = true))
-                engine.start(jobId)
-                watch(jobId)
+                if (engine.start(jobId)) watch(jobId) else stopSelf(startId)
             }
             ACTION_PAUSE -> engine.pause(jobId)
             ACTION_RESUME -> engine.resume(jobId)

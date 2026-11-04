@@ -50,7 +50,9 @@ object Exporter {
                         r.target, f.overall?.name ?: "QUEUED", rec?.staticStatus()?.name ?: "PENDING",
                         rec?.dyn?.name ?: "NOT_REQUESTED", f.sum?.winner?.wire ?: "",
                         f.sum?.blockingProbes?.toString() ?: "", f.sum?.totalProbes?.toString() ?: "",
-                        rec?.online?.toString() ?: "", f.st?.asn ?: "", f.st?.organisation ?: "",
+                        rec?.online?.toString() ?: "", f.st?.asn ?: "", f.st?.organisation?.let { org ->
+                            if (org.trimStart().firstOrNull() in listOf('=', '+', '-', '@')) "'$org" else org
+                        } ?: "",
                         iso(rec?.staticAt), iso(rec?.dynDoneAt), rec?.dynNote ?: rec?.staticError ?: "",
                     ).joinToString(",") { csv(it) }).append('\n')
                 }

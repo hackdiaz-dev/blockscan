@@ -39,7 +39,8 @@ class IpChecker(
             } catch (e: ApiException) {
                 if (!e.retriable || attempt >= cfg.retries) throw e
                 attempt++
-                delay(maxOf(e.retryAfterMs ?: 0L, backoffMs(attempt)))
+                val backoff = if (e.kind == ApiException.Kind.RATE_LIMITED) 20_000L * attempt else backoffMs(attempt)
+                delay(maxOf(e.retryAfterMs ?: 0L, backoff))
             }
         }
     }
@@ -96,6 +97,7 @@ class IpChecker(
         data object Done : End
         data object Closed : End
         data object Timeout : End
+        data class Malformed(val event: String) : End
         data class Server(val code: Int?, val message: String) : End
         data class Api(val ex: ApiException) : End
     }
@@ -122,6 +124,7 @@ class IpChecker(
             onUpdate(rec)
 
             var end: End = End.Closed
+            var malformedEvent = false
             try {
                 withTimeout(cfg.probeTimeoutSec * 1000L) {
                     api.probe(id)
@@ -132,9 +135,11 @@ class IpChecker(
                                 is ProbeEvent.Result -> rec = rec.copy(probeRaw = rec.probeRaw + ev.raw)
                                 is ProbeEvent.Done -> {
                                     rec = rec.copy(responseCount = ev.responseCount, online = ev.online ?: rec.online)
-                                    end = End.Done
+                                    end = if (!malformedEvent && ev.responseCount != null && ev.responseCount == rec.probeRaw.size) End.Done
+                                    else End.Malformed("done: response_count=${ev.responseCount}, получено=${rec.probeRaw.size}")
                                 }
                                 is ProbeEvent.ServerError -> end = End.Server(ev.code, ev.message)
+                                is ProbeEvent.Malformed -> { malformedEvent = true; end = End.Malformed("битое SSE-событие ${ev.event}") }
                             }
                             onUpdate(rec)
                         }
@@ -157,13 +162,18 @@ class IpChecker(
             val retryAfter = (e as? End.Api)?.ex?.retryAfterMs
             val reason = reasonOf(e, cfg)
 
-            if (got > 0) {
+            if (got > 0 || e is End.Malformed) {
                 // Частичные результаты сохраняем, но завершённой проверку не считаем.
                 rec = rec.copy(
                     dyn = DynamicStatus.PARTIAL,
                     dynNote = "$reason. Получено ответов сканеров: $got" + (rec.online?.let { " из $it" } ?: ""),
                     finishedAt = clock(),
                 )
+                onUpdate(rec)
+                return rec
+            }
+            if (e is End.Api && !e.ex.retriable) {
+                rec = rec.copy(dyn = DynamicStatus.FAILED, dynNote = "Сканеры не ответили: $reason", finishedAt = clock())
                 onUpdate(rec)
                 return rec
             }
@@ -187,6 +197,7 @@ class IpChecker(
         End.Done -> "завершено"
         End.Closed -> "поток закрыт сервером до события done"
         End.Timeout -> "таймаут ${cfg.probeTimeoutSec} с"
+        is End.Malformed -> e.event
         is End.Server -> "сервис вернул ошибку" + (e.code?.let { " $it" } ?: "") + ": ${e.message}"
         is End.Api -> describe(e.ex)
     }

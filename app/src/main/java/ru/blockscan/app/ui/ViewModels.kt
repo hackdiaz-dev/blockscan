@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,19 +79,23 @@ class CheckViewModel(private val c: AppContainer, val target: String) : ViewMode
     private val _record = MutableStateFlow(CheckRecord(target = target, startedAt = System.currentTimeMillis()))
     val record: StateFlow<CheckRecord> = _record.asStateFlow()
     private var job: Job? = null
+    private var runId = 0L
 
     init { run() }
 
     val busy: Boolean get() = !_record.value.isTerminal
 
     fun run() {
+        val thisRun = ++runId
         job?.cancel()
         job = viewModelScope.launch {
-            _record.value = CheckRecord(target = target, startedAt = System.currentTimeMillis())
+            var result = CheckRecord(target = target, startedAt = System.currentTimeMillis())
+            _record.value = result
             try {
-                _record.value = c.checker.check(target) { _record.value = it }
+                result = c.checker.check(target) { update -> result = update; if (runId == thisRun) _record.value = update }
+                if (runId == thisRun) _record.value = result
             } finally {
-                withContext(NonCancellable + Dispatchers.IO) { c.db.addSingle(_record.value) }
+                if (runId == thisRun) withContext(NonCancellable + Dispatchers.IO) { c.db.addSingle(result) }
             }
         }
     }
@@ -214,6 +219,8 @@ class ScanViewModel(private val c: AppContainer, initialInput: String) : ViewMod
 }
 
 class JobViewModel(private val c: AppContainer, val jobId: Long) : ViewModel() {
+    private val _exportMessage = MutableStateFlow<String?>(null)
+    val exportMessage: StateFlow<String?> = _exportMessage.asStateFlow()
     val filter = MutableStateFlow(ItemFilter.ALL)
     val search = MutableStateFlow("")
     val sort = MutableStateFlow(ItemSort.ORDER)
@@ -235,7 +242,8 @@ class JobViewModel(private val c: AppContainer, val jobId: Long) : ViewModel() {
     fun stop() = c.engine.stop(jobId)
 
     fun export(uri: Uri, format: ExportFormat) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
+          try { withContext(Dispatchers.IO) {
             val raw = c.settings.current.exportRaw
             val rows = sequence {
                 var off = 0
@@ -246,9 +254,16 @@ class JobViewModel(private val c: AppContainer, val jobId: Long) : ViewModel() {
                     off += page.size
                 }
             }
-            c.context.contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use {
+            val stream = c.context.contentResolver.openOutputStream(uri)
+                ?: throw java.io.IOException("Не удалось открыть файл для записи")
+            stream.bufferedWriter(Charsets.UTF_8).use {
                 Exporter.write(it, format, rows, raw)
             }
+          }; _exportMessage.value = "Экспорт завершён" } catch (e: CancellationException) {
+              throw e
+          } catch (e: Exception) {
+              _exportMessage.value = "Ошибка экспорта: ${e.message ?: "не удалось сохранить файл"}"
+          }
         }
     }
 }

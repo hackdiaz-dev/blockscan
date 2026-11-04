@@ -11,19 +11,35 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.Base64
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import ru.blockscan.app.domain.*
 
 object RecordCodec {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-    fun encode(r: CheckRecord): String = json.encodeToString(r)
-    fun decode(s: String?): CheckRecord? = s?.let { runCatching { json.decodeFromString<CheckRecord>(it) }.getOrNull() }
+    fun encode(r: CheckRecord): String {
+        val bytes = json.encodeToString(r).toByteArray(Charsets.UTF_8)
+        val compressed = ByteArrayOutputStream().also { out -> GZIPOutputStream(out).use { it.write(bytes) } }.toByteArray()
+        val encoded = "GZ1:" + Base64.getEncoder().encodeToString(compressed)
+        return if (encoded.length < bytes.size) encoded else bytes.toString(Charsets.UTF_8)
+    }
+    fun decode(s: String?): CheckRecord? = s?.let { raw -> runCatching {
+        val value = if (raw.startsWith("GZ1:")) GZIPInputStream(ByteArrayInputStream(Base64.getDecoder().decode(raw.drop(4))))
+            .bufferedReader(Charsets.UTF_8).use { it.readText() } else raw
+        json.decodeFromString<CheckRecord>(value)
+    }.getOrNull() }
 }
 
 /**
  * Хранилище на чистом SQLite (SQLiteOpenHelper). Room сознательно не используется:
  * его процессор аннотаций при сборке грузит нативную sqlite-jdbc, что ненадёжно в JVM под Termux.
  */
-class SqliteStore(context: Context) : SQLiteOpenHelper(context, "blockscan.db", null, 1), ScanStore, HistoryStore {
+class SqliteStore(context: Context) : SQLiteOpenHelper(context, "blockscan.db", null, 2), ScanStore, HistoryStore {
+
+    init { setWriteAheadLoggingEnabled(true) }
 
     private val _changes = MutableSharedFlow<Unit>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     override val changes: SharedFlow<Unit> = _changes.asSharedFlow()
@@ -44,9 +60,12 @@ class SqliteStore(context: Context) : SQLiteOpenHelper(context, "blockscan.db", 
                 "PRIMARY KEY(job_id, target))",
         )
         db.execSQL("CREATE INDEX idx_items_state ON scan_items(job_id, state, seq)")
+        db.execSQL("CREATE INDEX idx_items_counts ON scan_items(job_id, state, overall)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) db.execSQL("CREATE INDEX IF NOT EXISTS idx_items_counts ON scan_items(job_id, state, overall)")
+    }
 
     private fun notifyChange() { _changes.tryEmit(Unit) }
 

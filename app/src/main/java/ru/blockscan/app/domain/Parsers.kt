@@ -130,6 +130,6 @@ object ProbeParser {
             else -> null
         }
     } catch (e: ApiException) {
-        null
+        if (name == "result" || name == "done") ProbeEvent.Malformed(name, data) else null
     }
 }
