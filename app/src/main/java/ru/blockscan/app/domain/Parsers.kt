@@ -93,6 +93,40 @@ object ProbeParser {
             hostResultsSize = (o["host_results"] as? JsonArray)?.size,
             targetHop = o["target_hop"].intOrNull(),
             dpiHop = o["dpi_hop"].intOrNull(),
+            dns = (o["dns"] as? JsonObject)?.let { dns ->
+                val observations = (dns["observations"] as? JsonArray).orEmpty().mapNotNull { item ->
+                    val observation = item as? JsonObject ?: return@mapNotNull null
+                    val metadata = observation["metadata"] as? JsonObject
+                    val outcome = observation["outcome"] as? JsonObject
+                    ProbeDnsObservation(
+                        provider = observation["provider"].text(),
+                        protocol = observation["protocol"].text(),
+                        suspectedSpoofing = observation["suspected_spoofing"].boolOrNull(),
+                        responseCodes = metadata?.get("response_codes").textList(),
+                        ipv4Count = metadata?.get("ipv4_count").intOrNull(),
+                        ipv6Count = metadata?.get("ipv6_count").intOrNull(),
+                        outcomeType = outcome?.get("type").text(),
+                        addresses = outcome?.get("addresses").textList(),
+                        errorMessage = outcome?.get("message").text(),
+                    )
+                }
+                ProbeDnsInfo(
+                    spoofingDetected = dns["spoofing_detected"].boolOrNull(),
+                    suspiciousProviderCount = dns["suspicious_provider_count"].intOrNull(),
+                    verdictThreshold = dns["verdict_threshold"].intOrNull(),
+                    samplesPerProtocol = dns["samples_per_protocol"].intOrNull(),
+                    observations = observations,
+                )
+            },
+            hostResults = (o["host_results"] as? JsonArray).orEmpty().mapNotNull { item ->
+                val host = item as? JsonObject ?: return@mapNotNull null
+                val evidence = host["probe_evidence"] as? JsonObject
+                ProbeHostResult(
+                    hostId = host["host_id"].text(),
+                    host = host["host"].text(),
+                    evidenceType = evidence?.get("type").text(),
+                )
+            },
         )
     }
 

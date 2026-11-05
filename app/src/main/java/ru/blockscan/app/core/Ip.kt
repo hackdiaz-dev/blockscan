@@ -1,6 +1,7 @@
 package ru.blockscan.app.core
 
 import java.math.BigInteger
+import java.net.IDN
 
 enum class IpVersion(val bits: Int) { V4(32), V6(128) }
 
@@ -122,6 +123,35 @@ object IpParser {
     }
 }
 
+/** Strict public DNS host name parser used for the single-target domain check. */
+object DomainParser {
+    fun canonical(text: String): String? {
+        var input = text.trim()
+        if (input.isEmpty() || input.any { it.isWhitespace() }) return null
+        if (input.contains("://")) {
+            val scheme = input.substringBefore("://").lowercase()
+            if (scheme != "http" && scheme != "https") return null
+            input = input.substringAfter("://")
+        }
+        input = input.substringBefore('/').substringBefore('?').substringBefore('#')
+        if (input.contains('@') || input.startsWith('[')) return null
+        if (input.count { it == ':' } == 1) {
+            val port = input.substringAfter(':')
+            val portNumber = port.toIntOrNull() ?: return null
+            if (port.isEmpty() || !port.all(Char::isDigit) || portNumber !in 1..65535) return null
+            input = input.substringBefore(':')
+        } else if (':' in input) return null
+        input = input.removeSuffix(".")
+        if (input.isEmpty() || input.length > 253) return null
+        val ascii = runCatching { IDN.toASCII(input, IDN.USE_STD3_ASCII_RULES).lowercase() }.getOrNull() ?: return null
+        if (ascii.length > 253) return null
+        val labels = ascii.split('.')
+        if (labels.size < 2 || labels.any { it.isEmpty() || it.length > 63 }) return null
+        if (labels.any { label -> label.all(Char::isDigit) }) return null
+        return ascii.takeIf { labels.all { label -> label.first().isLetterOrDigit() && label.last().isLetterOrDigit() } }
+    }
+}
+
 data class Cidr(val version: IpVersion, val network: BigInteger, val prefix: Int) {
     val hostBits: Int get() = version.bits - prefix
     val size: BigInteger get() = BigInteger.ONE.shiftLeft(hostBits)
@@ -231,6 +261,7 @@ object ScanPlanner {
     fun fromCidr(text: String, excludeEdges: Boolean): PlanResult {
         val t = text.trim()
         if (t.isEmpty()) return PlanResult.Error("Введите подсеть CIDR или IP-адрес")
+        if (DomainParser.canonical(t) != null) return PlanResult.Error("Домены можно проверять только в одиночном режиме")
         val warnings = ArrayList<String>()
         val cidr: Cidr
         if (t.contains('/')) {
@@ -257,6 +288,9 @@ object ScanPlanner {
     }
 
     fun fromRange(from: String, to: String): PlanResult {
+        if (DomainParser.canonical(from) != null || DomainParser.canonical(to) != null) {
+            return PlanResult.Error("Домены можно проверять только в одиночном режиме")
+        }
         val a = IpParser.parse(from) ?: return PlanResult.Error("Некорректный начальный IP")
         val b = IpParser.parse(to) ?: return PlanResult.Error("Некорректный конечный IP")
         if (a.version != b.version) return PlanResult.Error("Начало и конец диапазона должны быть одной версии IP")
@@ -270,6 +304,9 @@ object ScanPlanner {
     fun fromList(text: String): PlanResult {
         val tokens = text.split(Regex("[\\s,;]+")).filter { it.isNotEmpty() }
         if (tokens.isEmpty()) return PlanResult.Error("Список пуст")
+        if (tokens.any { DomainParser.canonical(it) != null }) {
+            return PlanResult.Error("Домены можно проверять только в одиночном режиме")
+        }
         val ok = LinkedHashSet<String>()
         var invalid = 0
         val badSamples = ArrayList<String>()

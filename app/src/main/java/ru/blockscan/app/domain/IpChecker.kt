@@ -7,6 +7,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import ru.blockscan.app.core.IpClassifier
+import ru.blockscan.app.core.DomainParser
 import ru.blockscan.app.core.IpParser
 
 /**
@@ -49,13 +50,14 @@ class IpChecker(
 
     suspend fun check(target: String, onUpdate: suspend (CheckRecord) -> Unit = {}): CheckRecord {
         val cfg = settings().sanitized()
-        var rec = CheckRecord(target = target, startedAt = clock())
+        val normalizedTarget = DomainParser.canonical(target) ?: target.trim()
+        var rec = CheckRecord(target = normalizedTarget, startedAt = clock())
         onUpdate(rec)
 
         val staticPair: Pair<String, StaticResult> = try {
             withRetries(cfg) {
                 spaced(cfg.requestDelayMs)
-                val body = api.check(target)
+                val body = api.check(normalizedTarget)
                 body to CheckParser.parse(body)
             }
         } catch (e: ApiException) {
@@ -66,17 +68,18 @@ class IpChecker(
 
         rec = rec.copy(staticRaw = staticPair.first, staticAt = clock())
         val id = staticPair.second.id
-        val ip = IpParser.parse(target)
+        val ip = IpParser.parse(normalizedTarget)
+        val isDomain = DomainParser.canonical(normalizedTarget) != null
         rec = when {
             id.isNullOrBlank() -> rec.copy(
                 dyn = DynamicStatus.UNAVAILABLE,
                 dynNote = "Сервис не вернул идентификатор проверки (id)",
             )
-            ip == null -> rec.copy(
+            ip == null && !isDomain -> rec.copy(
                 dyn = DynamicStatus.UNAVAILABLE,
-                dynNote = "Динамическая проверка выполняется только для одиночных IP",
+                dynNote = "Динамическая проверка недоступна для подсетей",
             )
-            cfg.skipDynamicForNonPublic && IpClassifier.isNonPublic(ip) -> rec.copy(
+            ip != null && cfg.skipDynamicForNonPublic && IpClassifier.isNonPublic(ip) -> rec.copy(
                 dyn = DynamicStatus.UNAVAILABLE,
                 dynNote = "Частный или служебный адрес: по данным сторонних клиентов сервис не запускает для него " +
                     "динамическую проверку (можно отключить в настройках)",

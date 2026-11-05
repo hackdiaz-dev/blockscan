@@ -77,6 +77,18 @@ class ParsersTest {
         assertEquals(254, s.ips.size)
     }
 
+    @Test fun domainProbeParsesDnsAndHostEvidenceWithoutInterpretingTypes() {
+        val raw = """{"job_id":"j","probe_id":"p","provider":"Probe","verdicts":["sni_block"],"host_results":[{"host_id":"h1","host":"discord.com","probe_evidence":{"type":"DataTimeout","bytes":128}},{"host_id":"h2","host":"cdn.discord.com","probe_evidence":{"type":"Good"}}],"dns":{"spoofing_detected":true,"suspicious_provider_count":2,"verdict_threshold":3,"samples_per_protocol":4,"observations":[{"provider":"Resolver A","protocol":"Udp","suspected_spoofing":true,"metadata":{"response_codes":["NOERROR"],"ipv4_count":1,"ipv6_count":1},"outcome":{"type":"Answer","addresses":["162.159.128.233","2606:4700::1111"]}},{"provider":"Resolver B","protocol":"Doh","suspected_spoofing":false,"metadata":{"response_codes":["NXDOMAIN"],"ipv4_count":0,"ipv6_count":0},"outcome":{"type":"NoRecords"}}]}}"""
+        val result = ProbeParser.parseResult(raw)
+
+        assertEquals(true, result.dns!!.spoofingDetected)
+        assertEquals(2, result.dns.suspiciousProviderCount)
+        assertEquals(listOf("162.159.128.233", "2606:4700::1111"), result.dns.observations.first().addresses)
+        assertEquals("NoRecords", result.dns.observations.last().outcomeType)
+        assertEquals(mapOf("DataTimeout" to 1, "Good" to 1), result.hostResults.groupingBy { it.evidenceType!! }.eachCount())
+        assertEquals(2, result.hostResultsSize)
+    }
+
     @Test fun unknownAndMistypedFieldsDoNotBreakParsing() {
         val raw = """{"id":"a","target":"1.2.3.4","blocked":"yes","new_field":{"x":1},"geo":"oops","complaints":[{"date":"d"},5],"cdn_providers":{"x":[]},"whitelist":{"k":1}}"""
         val s = CheckParser.parse(raw)

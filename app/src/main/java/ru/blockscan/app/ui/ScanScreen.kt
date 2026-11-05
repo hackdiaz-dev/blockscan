@@ -78,7 +78,7 @@ private fun SetupPanel(vm: ScanViewModel) {
         item {
             Text(
                 "Каждый адрес проверяется отдельным запросом: сначала списки, затем сканеры. " +
-                    "Подсеть целиком в сервис не отправляется.",
+                    "Подсеть целиком в сервис не отправляется. Домены проверяются только одиночно с главного экрана.",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

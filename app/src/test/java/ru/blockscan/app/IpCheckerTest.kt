@@ -66,6 +66,17 @@ class IpCheckerTest {
         assertEquals(1, api.probeIds.size)
     }
 
+    @Test fun domainIsSentToServiceAndRunsDynamicWithoutLocalDnsExpansion() = runTest {
+        val domainResponse = """{"id":"domain-id","target":"discord.com","target_type":"Домен","blocked":true,"rkn_domain":"discord.com","ips":["162.159.128.233","2606:4700::1111"],"blocked_subnets":[],"cdn_providers":{"cloudflare":[{"provider":"cloudflare","cidr":"162.159.128.0/20","region":null}]},"geo":{"asn":"AS13335","country_code":null,"organisation":"Cloudflare, Inc.","city_geo_name_id":null,"location":"-"},"reverse_lookup":[],"complaints":[]}"""
+        val api = FakeApi(onCheck = { domainResponse }, onProbe = { Fixtures.smallProbeFlow() })
+        val result = checker(api).check("HTTPS://Discord.com:443/path")
+
+        assertEquals(listOf("discord.com"), api.checkTargets)
+        assertEquals(listOf("domain-id"), api.probeIds)
+        assertEquals(DynamicStatus.DONE, result.dyn)
+        assertEquals(listOf("162.159.128.233", "2606:4700::1111"), result.static()!!.ips)
+    }
+
     @Test fun missingIdMeansDynamicUnavailable() = runTest {
         val api = FakeApi(onCheck = { Fixtures.checkJson("8.8.8.8", id = null) })
         val r = checker(api).check("8.8.8.8")

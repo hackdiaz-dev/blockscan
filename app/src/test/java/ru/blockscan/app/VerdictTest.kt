@@ -28,6 +28,16 @@ class VerdictTest {
         assertEquals(Verdict.OK, VerdictLogic.select(listOf(probe(Verdict.OK), probe(Verdict.OK), probe(Verdict.TSPU_BLOCK)), false))
     }
 
+    @Test fun cdnHostResultsRuleMatchesWebsiteAndBlockingVerdictsWin() {
+        val hostCheck = probe(Verdict.OK, cdnUnblocked = false, hostResults = 22)
+        assertEquals(Verdict.CDN_BLOCK, VerdictLogic.top(hostCheck, isStaticCdn = true))
+        assertEquals(Verdict.OK, VerdictLogic.top(hostCheck.copy(cdnUnblocked = true), isStaticCdn = true))
+        assertEquals(Verdict.SNI_BLOCK, VerdictLogic.top(
+            probe(Verdict.OK, Verdict.SNI_BLOCK, cdnUnblocked = false, hostResults = 22), isStaticCdn = true,
+        ))
+        assertEquals(Verdict.OK, VerdictLogic.top(probe(Verdict.OK, hostResults = 0), isStaticCdn = true))
+    }
+
     @Test fun uncertainOrEmptyGivesNoWinner() {
         assertNull(VerdictLogic.select(emptyList(), false))
         assertNull(VerdictLogic.select(listOf(probe(Verdict.UNCERTAIN), probe(Verdict.UNCERTAIN), probe(Verdict.OK)), false))
@@ -62,6 +72,17 @@ class VerdictTest {
     @Test fun majorityBlockedGivesBlocked() {
         val blocked = List(3) { """{"verdicts":["tspu_block"],"host_results":[]}""" } + """{"verdicts":["ok"],"host_results":[]}"""
         assertEquals(Overall.BLOCKED, rec(DynamicStatus.DONE, blocked).overall())
+    }
+
+    @Test fun rknStaticListingDoesNotReplaceSuccessfulScannerVerdict() {
+        val static = """{"id":"j","target":"discord.com","target_type":"Домен","blocked":true,"rkn_domain":"discord.com","ips":["162.159.128.233"],"cdn_providers":{},"geo":{"location":"-"},"blocked_subnets":[],"reverse_lookup":[],"complaints":[]}"""
+        val rec = CheckRecord(
+            target = "discord.com", startedAt = 0, staticRaw = static,
+            dyn = DynamicStatus.DONE, responseCount = 1,
+            probeRaw = listOf("""{"verdicts":["ok"],"host_results":[{"probe_evidence":{"type":"Good"}}]}"""),
+        )
+        assertEquals("discord.com", rec.static()!!.rknDomain)
+        assertEquals(Overall.COMPLETE, rec.overall())
     }
 
     @Test fun staticOnlyNeverBecomesComplete() {

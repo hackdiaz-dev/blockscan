@@ -20,15 +20,16 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ru.blockscan.app.core.IpParser
 import ru.blockscan.app.domain.*
 
-/** Экран живой проверки одного IP. */
+/** Экран живой проверки IP или домена. */
 @Composable
 fun CheckScreen(target: String, onBack: () -> Unit) {
     val vm = containerViewModel(key = "check:$target") { CheckViewModel(it, target) }
     val rec by vm.record.collectAsStateWithLifecycle()
     AppScaffold(
-        title = "Проверка IP", onBack = onBack,
+        title = "Проверка IP или домена", onBack = onBack,
         actions = {
             IconButton(onClick = vm::run, enabled = rec.isTerminal) {
                 Icon(Icons.Default.Refresh, contentDescription = "Перепроверить")
@@ -63,6 +64,7 @@ fun StoredRecordScreen(source: RecordSource, key: String, onBack: () -> Unit) {
 }
 
 private fun LazyListScope.checkBody(rec: CheckRecord) {
+    item(key = "regions") { RegionAvailabilityMap(rec) }
     item(key = "header") { HeaderCard(rec) }
     item(key = "static") { StaticCard(rec) }
     item(key = "dynamic") { DynamicCard(rec) }
@@ -74,6 +76,7 @@ private fun LazyListScope.checkBody(rec: CheckRecord) {
 private fun HeaderCard(rec: CheckRecord) {
     val overall = remember(rec) { rec.overall() }
     val summary = remember(rec) { rec.summary() }
+    val static = remember(rec.staticRaw) { rec.static() }
     SectionCard("Итог") {
         Text(rec.target, style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Monospace)
         OverallChip(overall)
@@ -84,6 +87,12 @@ private fun HeaderCard(rec: CheckRecord) {
             Text(
                 "Внимание: блокировку увидели ${summary.blockingProbes} из ${summary.totalProbes} сканеров, " +
                     "хотя большинство показывает «${summary.winner?.ru}».",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error,
+            )
+        }
+        if (rec.dyn == DynamicStatus.DONE && static?.rknDomain != null && summary?.winner?.blocking == false) {
+            Text(
+                "Домен найден в списках РКН, но большинство сканеров показывает доступность.",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error,
             )
         }
@@ -114,15 +123,26 @@ private fun StaticCard(rec: CheckRecord) {
                 "Реальную доступность показывают сканеры.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (st.rknDomain != null) {
+            Text("В списках РКН", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.error)
+        }
+        if (IpParser.parse(rec.target) != null) {
+            Text(
+                "Проверка по IP не включает SNI и DNS: для сайтов проверяйте домен.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         KeyValue("Тип цели", st.targetType)
+        KeyValue("Адреса", st.ips.joinToString(", ").ifEmpty { "—" })
         KeyValue("Размер подсети", st.subnetSize)
         KeyValue("Заблокированные подсети РКН", st.blockedSubnets.joinToString(", ").ifEmpty { "не найдены" })
         KeyValue("Реестр РКН (домен)", st.rknDomain)
         KeyValue("CDN", st.cdn.joinToString("; ") { h -> h.name + (h.cidr?.let { " ($it)" } ?: "") + (h.region?.let { " [$it]" } ?: "") }
             .ifEmpty { "не найден" })
         KeyValue("Белый список", st.whitelist ?: "нет")
-        KeyValue("ASN", st.asn)
-        KeyValue("Организация / провайдер", st.organisation)
+        val isDomain = st.targetType?.contains("домен", ignoreCase = true) == true
+        KeyValue(if (isDomain) "ASN (по первому IP)" else "ASN", st.asn)
+        KeyValue(if (isDomain) "Организация (по первому IP)" else "Организация / провайдер", st.organisation)
         KeyValue("Страна", st.countryCode)
         KeyValue("Регион / город", st.city)
         KeyValue("Расположение", st.location?.takeIf { it != "-" })
@@ -158,6 +178,8 @@ private fun ComplaintsChart(values: List<Int>) {
 @Composable
 private fun DynamicCard(rec: CheckRecord) {
     val summary = remember(rec.probeRaw.size, rec.staticRaw) { rec.summary() }
+    val probes = remember(rec.probeRaw.size) { rec.probes() }
+    var showDnsDetails by rememberSaveable(rec.target) { mutableStateOf(false) }
     SectionCard("Динамическая проверка (сканеры)") {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (rec.dyn == DynamicStatus.RUNNING || rec.dyn == DynamicStatus.QUEUED) {
@@ -181,6 +203,57 @@ private fun DynamicCard(rec: CheckRecord) {
             KeyValue("Итог по большинству", summary.winner?.ru ?: "нет однозначного итога")
             KeyValue("Сканеров видят блокировку", "${summary.blockingProbes} из ${summary.totalProbes}")
             summary.counts.entries.sortedBy { it.key.ordinal }.forEach { (v, n) -> KeyValue(v.ru, n.toString()) }
+        }
+        val dnsProbes = probes.mapNotNull { probe -> probe.dns?.let { probe to it } }
+        if (dnsProbes.isNotEmpty()) {
+            HorizontalDivider()
+            Text("DNS сканеров", style = MaterialTheme.typography.titleSmall)
+            KeyValue("Подмена DNS обнаружена", "${dnsProbes.count { it.second.spoofingDetected == true }} из ${dnsProbes.size} сканеров")
+            dnsProbes.mapNotNull { it.second.suspiciousProviderCount }.maxOrNull()?.let {
+                KeyValue("Подозрительных DNS-провайдеров (максимум)", it.toString())
+            }
+            dnsProbes.firstOrNull()?.second?.let { dns ->
+                if (dns.verdictThreshold != null || dns.samplesPerProtocol != null) {
+                    KeyValue("DNS: порог / образцов на протокол", "${dns.verdictThreshold ?: "—"} / ${dns.samplesPerProtocol ?: "—"}")
+                }
+            }
+            val observedAddresses = dnsProbes.flatMap { (_, dns) -> dns.observations.flatMap { it.addresses } }.distinct()
+            KeyValue("Адреса в DNS-ответах", observedAddresses.joinToString(", ").ifEmpty { "—" })
+            val disagreeing = dnsProbes.count { (_, dns) ->
+                dns.observations.filter { it.outcomeType != null }.map {
+                    "${it.outcomeType}:${it.addresses.sorted().joinToString(",")}:${it.errorMessage.orEmpty()}"
+                }.distinct().size > 1
+            }
+            KeyValue("Разные ответы внутри сканера", "$disagreeing из ${dnsProbes.size}")
+            TextButton(onClick = { showDnsDetails = !showDnsDetails }) {
+                Text(if (showDnsDetails) "Скрыть DNS-наблюдения" else "Показать DNS-наблюдения")
+            }
+            if (showDnsDetails) {
+                dnsProbes.forEach { (probe, dns) ->
+                    val rows = dns.observations.joinToString("; ") { observation ->
+                        val outcome = when (observation.outcomeType) {
+                            "Answer" -> observation.addresses.joinToString(",").ifEmpty { "Answer" }
+                            "Error" -> "Error${observation.errorMessage?.let { ": $it" }.orEmpty()}"
+                            else -> observation.outcomeType ?: "—"
+                        }
+                        val metadata = buildList {
+                            if (observation.responseCodes.isNotEmpty()) add("codes=${observation.responseCodes.joinToString(",")}")
+                            observation.ipv4Count?.let { add("IPv4=$it") }
+                            observation.ipv6Count?.let { add("IPv6=$it") }
+                        }.joinToString(" ")
+                        "${observation.provider ?: "?"}/${observation.protocol ?: "?"}: $outcome" +
+                            (if (metadata.isNotEmpty()) " [$metadata]" else "") +
+                            (if (observation.suspectedSpoofing == true) " (suspected_spoofing)" else "")
+                    }
+                    Text("${probe.provider ?: "Сканер"}: $rows", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        val evidenceCounts = probes.flatMap { it.hostResults }.groupingBy { it.evidenceType ?: "(без типа)" }.eachCount()
+        if (evidenceCounts.isNotEmpty()) {
+            HorizontalDivider()
+            KeyValue("host_results по probe_evidence.type", evidenceCounts.entries
+                .sortedBy { it.key }.joinToString(", ") { "${it.key}: ${it.value}" })
         }
         KeyValue("Динамика запущена", rec.dynStartedAt?.let(Fmt::time))
         if (rec.dyn == DynamicStatus.DONE && rec.dynStartedAt != null && rec.dynDoneAt != null) {

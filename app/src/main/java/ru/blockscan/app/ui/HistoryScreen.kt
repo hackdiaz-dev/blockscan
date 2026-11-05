@@ -40,7 +40,7 @@ fun HistoryScreen(onBack: () -> Unit, onOpen: (HistoryEntry) -> Unit) {
                                 e.overall?.let { OverallChip(it, compact = true) }
                             }
                             Text(
-                                (if (e.kind == HistoryKind.SCAN) "Сканирование подсети" else "Проверка IP") + " • " + Fmt.time(e.ts),
+                                (if (e.kind == HistoryKind.SCAN) "Сканирование подсети" else "Проверка IP/домена") + " • " + Fmt.time(e.ts),
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Text(e.summary, style = MaterialTheme.typography.bodyMedium)

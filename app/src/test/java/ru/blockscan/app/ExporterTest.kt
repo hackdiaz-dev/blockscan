@@ -27,6 +27,7 @@ class ExporterTest {
         assertEquals(4, lines.size)
         assertTrue(lines[1].startsWith("1.1.1.1,COMPLETE,LISTED,DONE,ok,5,37,37,AS13335,\"Cloudflare, Inc.\","))
         assertTrue(lines[1].contains("2023-11-14T22:13:20Z"))
+        assertTrue(lines[1].contains("Проверка по IP не включает SNI и DNS"))
         assertTrue(lines[2].startsWith("1.1.1.2,QUEUED,PENDING"))
         assertTrue(lines[3].contains("\"ошибка, \"\"кавычки\"\"\""))
     }
@@ -39,6 +40,7 @@ class ExporterTest {
         assertEquals("1.1.1.1", first["static_raw"]!!.jsonObject["target"]!!.jsonPrimitive.content)
         assertEquals(37, (first["probe_raw"] as JsonArray).size)
         assertEquals("2023-11-14T22:13:20Z", first["dynamic_finished_at"]!!.jsonPrimitive.content)
+        assertTrue(first["ip_check_note"]!!.jsonPrimitive.content.contains("SNI и DNS"))
         assertEquals("QUEUED", arr[1].jsonObject["overall"]!!.jsonPrimitive.content)
     }
 
@@ -51,8 +53,9 @@ class ExporterTest {
     @Test fun txtIsTabSeparated() {
         val lines = out(ExportFormat.TXT, true).trim().lines()
         assertEquals(3, lines.size)
-        assertEquals(7, lines[0].split('\t').size)
+        assertEquals(8, lines[0].split('\t').size)
         assertTrue(lines[0].startsWith("1.1.1.1\t"))
         assertTrue(lines[0].contains("5/37"))
+        assertTrue(lines[0].contains("Проверка по IP не включает SNI и DNS"))
     }
 }

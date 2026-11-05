@@ -13,6 +13,7 @@ import ru.blockscan.app.domain.*
  */
 class LiveApiTest {
     private val live = System.getenv("CHEBURCHECK_LIVE") == "1"
+    private val liveDomain = System.getenv("CHEBURCHECK_LIVE_DOMAIN") == "1"
 
     @Test fun realServiceRoundTrip() = runBlocking {
         assumeTrue("CHEBURCHECK_LIVE не задан", live)
@@ -30,5 +31,16 @@ class LiveApiTest {
         assertEquals("динамика должна завершиться событием done: ${r.dynNote}", DynamicStatus.DONE, r.dyn)
         assertTrue(r.probeRaw.isNotEmpty())
         assertNotEquals(Overall.UNKNOWN, r.overall())
+    }
+
+    @Test fun realDomainRoundTrip() = runBlocking {
+        assumeTrue("CHEBURCHECK_LIVE_DOMAIN не задан", liveDomain)
+        val checker = IpChecker(HttpCheckApi(), StartLimiter(), { AppSettings(probeTimeoutSec = 120) })
+        val record = checker.check("discord.com")
+        assertNull(record.staticError)
+        assertEquals("Домен", record.static()?.targetType)
+        assertTrue("API должен вернуть хотя бы один A/AAAA адрес", record.static()?.ips?.isNotEmpty() == true)
+        assertEquals("динамика домена должна завершиться событием done: ${record.dynNote}", DynamicStatus.DONE, record.dyn)
+        assertTrue(record.probeRaw.isNotEmpty())
     }
 }

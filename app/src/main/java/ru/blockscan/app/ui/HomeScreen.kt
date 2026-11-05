@@ -57,7 +57,7 @@ fun HomeScreen(
                 ) { Text("🛡", style = MaterialTheme.typography.headlineMedium) }
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("Проверка IP и подсетей", style = MaterialTheme.typography.headlineSmall)
+                    Text("Проверка IP, доменов и подсетей", style = MaterialTheme.typography.headlineSmall)
                     Text(
                         "Клиент сервиса Cheburcheck",
                         style = MaterialTheme.typography.bodyMedium,
@@ -69,13 +69,14 @@ fun HomeScreen(
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                label = { Text("IPv4, IPv6 или подсеть CIDR") },
+                label = { Text("IP, домен или подсеть CIDR") },
                 singleLine = true,
                 isError = kind == InputKind.INVALID,
                 supportingText = {
                     when (kind) {
-                        InputKind.INVALID -> Text("Некорректный IP или CIDR")
+                        InputKind.INVALID -> Text("Некорректный IP, домен или CIDR")
                         InputKind.CIDR -> Text("Подсеть: каждый адрес проверяется отдельно")
+                        InputKind.DOMAIN -> Text("Домен проверяется целиком; массовое сканирование доступно только для IP и CIDR")
                         else -> Text("Например 1.1.1.1 или 203.0.113.0/24")
                     }
                 },
@@ -85,12 +86,12 @@ fun HomeScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
                     onClick = { onCheck(text.trim()) },
-                    enabled = kind == InputKind.IP,
+                    enabled = kind == InputKind.IP || kind == InputKind.DOMAIN,
                     modifier = Modifier.weight(1f),
                 ) { Text("Проверить") }
                 FilledTonalButton(
                     onClick = { onScan(text.trim()) },
-                    enabled = kind != InputKind.INVALID,
+                    enabled = kind != InputKind.INVALID && kind != InputKind.DOMAIN,
                     modifier = Modifier.weight(1f),
                 ) { Text("Массово") }
             }
