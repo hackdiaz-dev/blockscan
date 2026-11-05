@@ -1,5 +1,4 @@
-Federal district boundary data: timurkanaz/Russia_geojson_OSM (OpenStreetMap).
-Source: https://github.com/timurkanaz/Russia_geojson_OSM
-Crimea and Sevastopol boundary data: alt-dmitry/RussianMap (OpenStreetMap and GIS-Lab).
-Source: https://github.com/alt-dmitry/RussianMap
-Geometry is simplified and projected for offline display.
+Map data © OpenStreetMap contributors, available under the Open Database License (ODbL): https://www.openstreetmap.org/copyright
+Federal district boundary data: timurkanaz/Russia_geojson_OSM (derived from OpenStreetMap). https://github.com/timurkanaz/Russia_geojson_OSM
+Crimea and Sevastopol boundary data: alt-dmitry/RussianMap (OpenStreetMap and GIS-Lab). https://github.com/alt-dmitry/RussianMap
+Geometry is simplified and projected for offline display. The file russia-federal-districts.mapdata is a derivative of this data and is distributed under the ODbL.

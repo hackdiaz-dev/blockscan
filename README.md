@@ -79,3 +79,7 @@ tools/       скрипт сбора образцов ответов API
 
 Спасибо авторам Cheburcheck за открытый сервис и документацию.
 Код БлокСкан распространяется по лицензии [MIT](LICENSE).
+
+## Данные карты
+
+Офлайн-карта федеральных округов построена на данных © участники OpenStreetMap (лицензия ODbL, https://www.openstreetmap.org/copyright), через наборы timurkanaz/Russia_geojson_OSM и alt-dmitry/RussianMap. Подробности в `app/src/main/assets/REGION_MAP_ATTRIBUTION.txt`.
