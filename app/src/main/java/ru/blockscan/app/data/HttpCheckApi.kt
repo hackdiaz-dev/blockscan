@@ -32,6 +32,7 @@ import kotlin.coroutines.resumeWithException
 class HttpCheckApi(
     private val baseUrl: String = "https://cheburcheck.ru",
     client: OkHttpClient = OkHttpClient(),
+    private val tokenProvider: () -> String = { "" },
 ) : CheckApi {
 
     private val http = client.newBuilder()
@@ -51,15 +52,21 @@ class HttpCheckApi(
         return b.build()
     }
 
-    private fun request(u: HttpUrl, accept: String) = Request.Builder()
-        .url(u)
-        .header("Accept", accept)
-        .header("User-Agent", USER_AGENT)
-        .build()
+    private fun request(u: HttpUrl, accept: String, auth: Boolean = false): Request {
+        val b = Request.Builder()
+            .url(u)
+            .header("Accept", accept)
+            .header("User-Agent", USER_AGENT)
+        if (auth) {
+            val token = tokenProvider().trim()
+            if (token.isNotEmpty()) b.header("Authorization", "Bearer $token")
+        }
+        return b.build()
+    }
 
-    private suspend fun getText(u: HttpUrl, accept: String): String {
+    private suspend fun getText(u: HttpUrl, accept: String, auth: Boolean = false): String {
         val resp = try {
-            http.newCall(request(u, accept)).await()
+            http.newCall(request(u, accept, auth)).await()
         } catch (e: IOException) {
             throw mapIo(e)
         }
@@ -79,12 +86,19 @@ class HttpCheckApi(
     override suspend fun healthcheck(): Boolean =
         getText(url("api", "v1", "healthcheck"), "text/plain").trim().equals("OK", ignoreCase = true)
 
+    /** Баланс кредитов API-токена. Запрос кредиты не расходует; 401 — токен не принят. */
+    suspend fun credits(): Int {
+        val body = getText(url("api", "v1", "credits"), "application/json", auth = true)
+        return Regex("\"credits\"\\s*:\\s*(-?\\d+)").find(body)?.groupValues?.get(1)?.toIntOrNull()
+            ?: throw ApiException(ApiException.Kind.BAD_RESPONSE, "в ответе нет поля credits")
+    }
+
     override suspend fun check(target: String): String =
         getText(url("api", "v1", "check", query = "target" to target), "application/json")
 
     @OptIn(InternalCoroutinesApi::class)
     override fun probe(id: String): Flow<ProbeEvent> = flow {
-        val call = sse.newCall(request(url("api", "v1", "probe", id), "text/event-stream"))
+        val call = sse.newCall(request(url("api", "v1", "probe", id), "text/event-stream", auth = true))
         val handle = currentCoroutineContext()[Job]?.invokeOnCompletion(onCancelling = true) { call.cancel() }
         try {
             val resp = try {

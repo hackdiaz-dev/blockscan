@@ -20,7 +20,10 @@ class IpChecker(
     private val limiter: StartLimiter,
     private val settings: () -> AppSettings,
     private val clock: () -> Long = { System.currentTimeMillis() },
+    /** true в приложении: без токена сканеры не запускаются. В тестах false. */
+    private val requireToken: Boolean = false,
 ) {
+    @Volatile private var rejectedToken: String? = null
     private val spaceMutex = Mutex()
     private var lastRequestAt = 0L
 
@@ -83,6 +86,14 @@ class IpChecker(
                 dyn = DynamicStatus.UNAVAILABLE,
                 dynNote = "Частный или служебный адрес: по данным сторонних клиентов сервис не запускает для него " +
                     "динамическую проверку (можно отключить в настройках)",
+            )
+            requireToken && cfg.apiToken.isBlank() -> rec.copy(
+                dyn = DynamicStatus.UNAVAILABLE,
+                dynNote = "Для запуска сканеров нужен API-токен: добавьте его в настройках",
+            )
+            requireToken && cfg.apiToken == rejectedToken -> rec.copy(
+                dyn = DynamicStatus.UNAVAILABLE,
+                dynNote = "Сервис не принял API-токен: проверьте его в настройках",
             )
             else -> rec.copy(dyn = DynamicStatus.QUEUED)
         }
@@ -154,6 +165,7 @@ class IpChecker(
             }
 
             val e = end
+            if (e is End.Api && e.ex.httpCode == 401) rejectedToken = cfg.apiToken
             val got = rec.probeRaw.size
             if (e is End.Done) {
                 rec = rec.copy(dyn = DynamicStatus.DONE, dynDoneAt = clock(), dynNote = null, finishedAt = clock())
@@ -180,7 +192,7 @@ class IpChecker(
                 onUpdate(rec)
                 return rec
             }
-            if (attempt >= cfg.retries) {
+            if (attempt >= cfg.retries || (e is End.Api && !e.ex.retriable)) {
                 rec = rec.copy(dyn = DynamicStatus.FAILED, dynNote = "Сканеры не ответили: $reason", finishedAt = clock())
                 onUpdate(rec)
                 return rec
@@ -213,7 +225,11 @@ class IpChecker(
             ApiException.Kind.NOT_FOUND -> "сервис не принял цель (404)"
             ApiException.Kind.SERVER -> "ошибка сервера" + (e.httpCode?.let { " $it" } ?: "")
             ApiException.Kind.BAD_RESPONSE -> "некорректный ответ сервиса"
-            ApiException.Kind.CLIENT -> "запрос отклонён" + (e.httpCode?.let { " ($it)" } ?: "")
+            ApiException.Kind.CLIENT -> when (e.httpCode) {
+                401 -> "нужен действующий API-токен (задайте или проверьте его в настройках)"
+                403 -> "сервис запретил проверку этого адреса (403)"
+                else -> "запрос отклонён" + (e.httpCode?.let { " ($it)" } ?: "")
+            }
         }
     }
 }

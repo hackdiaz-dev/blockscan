@@ -18,6 +18,8 @@ data class AppSettings(
     val skipDynamicForNonPublic: Boolean = true,
     val exportRaw: Boolean = true,
     val confirmThreshold: Int = 512,
+    /** API-токен Cheburcheck для запуска сканеров. Хранится только на устройстве. */
+    val apiToken: String = "",
 ) {
     /** Пределы защищают сервис: настройки не позволяют превысить его лимиты. */
     fun sanitized() = copy(
@@ -27,6 +29,7 @@ data class AppSettings(
         retries = retries.coerceIn(0, 6),
         probeStartsPerMinute = probeStartsPerMinute.coerceIn(1, 5),
         confirmThreshold = confirmThreshold.coerceIn(16, 65_536),
+        apiToken = apiToken.trim(),
     )
 }
 

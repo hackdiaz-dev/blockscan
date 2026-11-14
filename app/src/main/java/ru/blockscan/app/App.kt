@@ -18,9 +18,9 @@ import ru.blockscan.app.service.ScanService
 class AppContainer(val context: Context) {
     val settings = SettingsStore(context)
     val db = SqliteStore(context)
-    val api = HttpCheckApi()
+    val api = HttpCheckApi(tokenProvider = { settings.current.apiToken })
     val limiter = StartLimiter()
-    val checker = IpChecker(api, limiter, { settings.current })
+    val checker = IpChecker(api, limiter, { settings.current }, requireToken = true)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val engine = ScanEngine(checker, db, db, { settings.current }, scope)
 

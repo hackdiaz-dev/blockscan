@@ -26,6 +26,7 @@ class SettingsStore(context: Context) {
             .putBoolean("skipPriv", n.skipDynamicForNonPublic)
             .putBoolean("raw", n.exportRaw)
             .putInt("confirm", n.confirmThreshold)
+            .putString("apiToken", n.apiToken)
             .apply()
         _flow.value = n
     }
@@ -43,6 +44,7 @@ class SettingsStore(context: Context) {
             skipDynamicForNonPublic = prefs.getBoolean("skipPriv", d.skipDynamicForNonPublic),
             exportRaw = prefs.getBoolean("raw", d.exportRaw),
             confirmThreshold = prefs.getInt("confirm", d.confirmThreshold),
+            apiToken = prefs.getString("apiToken", d.apiToken) ?: d.apiToken,
         ).sanitized()
     }
 }

@@ -83,3 +83,7 @@ tools/       скрипт сбора образцов ответов API
 ## Данные карты
 
 Офлайн-карта федеральных округов построена на данных © участники OpenStreetMap (лицензия ODbL, https://www.openstreetmap.org/copyright), через наборы timurkanaz/Russia_geojson_OSM и alt-dmitry/RussianMap. Подробности в `app/src/main/assets/REGION_MAP_ATTRIBUTION.txt`.
+
+## API-токен
+
+Для динамической проверки (сетевые сканеры) Cheburcheck требует API-токен. Его выдаёт администратор сервиса по заявке на cheburcheck.ru. Токен вводится в приложении (Настройки → API-токен Cheburcheck), хранится только на вашем устройстве и отправляется только на cheburcheck.ru в заголовке `Authorization`. В репозитории и в APK токенов нет. Без токена работает проверка по спискам блокировок. Запуски сканеров могут расходовать кредиты токена.

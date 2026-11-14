@@ -11,6 +11,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.blockscan.app.BuildConfig
 import ru.blockscan.app.domain.ThemeMode
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import kotlinx.coroutines.launch
+import ru.blockscan.app.App
+import ru.blockscan.app.domain.ApiException
+import ru.blockscan.app.domain.IpChecker
 
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
@@ -18,12 +24,54 @@ fun SettingsScreen(onBack: () -> Unit) {
     val s by vm.settings.collectAsStateWithLifecycle()
     val service by vm.service.collectAsStateWithLifecycle()
     var confirmClear by remember { mutableStateOf(false) }
+    val appContext = LocalContext.current.applicationContext
+    val scope = rememberCoroutineScope()
+    var tokenInput by remember { mutableStateOf(s.apiToken) }
+    var tokenStatus by remember { mutableStateOf<String?>(null) }
+    var tokenChecking by remember { mutableStateOf(false) }
 
     AppScaffold(title = "Настройки", onBack = onBack) { pad ->
         Column(
             Modifier.padding(pad).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            SectionCard("API-токен Cheburcheck") {
+                Text(
+                    "Нужен для запуска сканеров (динамическая проверка). Без токена работает проверка по спискам. " +
+                        "Токен хранится только на этом устройстве и отправляется только на cheburcheck.ru. " +
+                        "Запуски сканеров могут расходовать кредиты токена. Токен выдаёт администратор сервиса по заявке.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = tokenInput,
+                    onValueChange = { tokenInput = it; tokenStatus = null },
+                    label = { Text("API-токен") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !tokenChecking && tokenInput.isNotBlank(),
+                    onClick = {
+                        val t = tokenInput.trim()
+                        vm.update { it.copy(apiToken = t) }
+                        tokenChecking = true
+                        tokenStatus = "Проверка…"
+                        scope.launch {
+                            tokenStatus = try {
+                                val n = (appContext as App).container.api.credits()
+                                "Токен принят. Кредитов: $n"
+                            } catch (e: ApiException) {
+                                if (e.httpCode == 401) "Токен не принят (401)" else "Токен сохранён, проверить не удалось: ${IpChecker.describe(e)}"
+                            }
+                            tokenChecking = false
+                        }
+                    },
+                ) { Text("Сохранить и проверить") }
+                TextButton(onClick = { tokenInput = ""; vm.update { it.copy(apiToken = "") }; tokenStatus = "Токен удалён" }) { Text("Удалить токен") }
+                tokenStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            }
             SectionCard("Тема") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(ThemeMode.SYSTEM to "Системная", ThemeMode.LIGHT to "Светлая", ThemeMode.DARK to "Тёмная").forEach { (m, l) ->
