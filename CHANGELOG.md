@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.0](https://github.com/hackdiaz-dev/blockscan/compare/v1.3.0...v1.4.0) (2026-11-14)
+
+
+### Новое
+
+* обновление приложения с GitHub и ссылка на репозиторий ([9cd54c3](https://github.com/hackdiaz-dev/blockscan/commit/9cd54c300ca2a6ae35e18f33056cd1b82d1aca28))
+
+
+### Исправления
+
+* градиентная карточка заполняет всю ширину ([64e5316](https://github.com/hackdiaz-dev/blockscan/commit/64e5316d4f4b364dacb8ad912987537798b504cf))
+* чистка ([d73e598](https://github.com/hackdiaz-dev/blockscan/commit/d73e598582320bd3ca5ed3b8ba75c22ba6348c16))
+
 ## [1.3.0](https://github.com/hackdiaz-dev/blockscan/compare/v1.2.0...v1.3.0) (2026-11-14)
 
 
