@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/hackdiaz-dev/blockscan/compare/v1.2.0...v1.3.0) (2026-11-14)
+
+
+### Новое
+
+* интерфейс в стиле Material 3 ([d904481](https://github.com/hackdiaz-dev/blockscan/commit/d9044813402b5b1757cf01b32413769f0698cc04))
+* темп запросов задаёт пользователь, убраны неофициальные ограничения ([894a41a](https://github.com/hackdiaz-dev/blockscan/commit/894a41a7bbd98652c65f2c76f494bad95e6f4f55))
+
 ## [1.2.0](https://github.com/hackdiaz-dev/blockscan/compare/v1.1.0...v1.2.0) (2026-11-14)
 
 
