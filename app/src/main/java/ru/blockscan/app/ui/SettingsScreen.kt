@@ -1,22 +1,30 @@
 package ru.blockscan.app.ui
 
+import android.os.Build
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import ru.blockscan.app.BuildConfig
-import ru.blockscan.app.domain.ThemeMode
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import ru.blockscan.app.App
+import ru.blockscan.app.BuildConfig
 import ru.blockscan.app.domain.ApiException
 import ru.blockscan.app.domain.IpChecker
+import ru.blockscan.app.domain.ThemeMode
 
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
@@ -33,9 +41,9 @@ fun SettingsScreen(onBack: () -> Unit) {
     AppScaffold(title = "Настройки", onBack = onBack) { pad ->
         Column(
             Modifier.padding(pad).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            SectionCard("API-токен Cheburcheck") {
+            SectionCard("API-токен Cheburcheck", icon = Icons.Default.Lock) {
                 Text(
                     "Нужен для запуска сканеров (динамическая проверка). Без токена работает проверка по спискам. " +
                         "Токен хранится только на этом устройстве и отправляется только на cheburcheck.ru. " +
@@ -47,11 +55,12 @@ fun SettingsScreen(onBack: () -> Unit) {
                     onValueChange = { tokenInput = it; tokenStatus = null },
                     label = { Text("API-токен") },
                     singleLine = true,
+                    shape = MaterialTheme.shapes.large,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Button(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                     enabled = !tokenChecking && tokenInput.isNotBlank(),
                     onClick = {
                         val t = tokenInput.trim()
@@ -69,17 +78,35 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                     },
                 ) { Text("Сохранить и проверить") }
-                TextButton(onClick = { tokenInput = ""; vm.update { it.copy(apiToken = "") }; tokenStatus = "Токен удалён" }) { Text("Удалить токен") }
-                tokenStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-            }
-            SectionCard("Тема") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(ThemeMode.SYSTEM to "Системная", ThemeMode.LIGHT to "Светлая", ThemeMode.DARK to "Тёмная").forEach { (m, l) ->
-                        FilterChip(selected = s.theme == m, onClick = { vm.update { it.copy(theme = m) } }, label = { Text(l) })
-                    }
+                TextButton(onClick = { tokenInput = ""; vm.update { it.copy(apiToken = "") }; tokenStatus = "Токен удалён" }) {
+                    Icon(Icons.Default.Delete, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Удалить токен")
+                }
+                tokenStatus?.let { msg ->
+                    val bad = msg.contains("не принят") || msg.contains("не удалось")
+                    Text(
+                        msg, style = MaterialTheme.typography.bodyMedium,
+                        color = if (bad) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    )
                 }
             }
-            SectionCard("Нагрузка на сервис") {
+            SectionCard("Оформление", icon = Icons.Default.Settings) {
+                val modes = listOf(ThemeMode.SYSTEM to "Системная", ThemeMode.LIGHT to "Светлая", ThemeMode.DARK to "Тёмная")
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    modes.forEachIndexed { index, (m, l) ->
+                        SegmentedButton(
+                            selected = s.theme == m,
+                            onClick = { vm.update { it.copy(theme = m) } },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = modes.size),
+                        ) { Text(l) }
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    SwitchRow("Цвета из обоев (Material You)", s.dynamicColor) { b -> vm.update { it.copy(dynamicColor = b) } }
+                }
+            }
+            SectionCard("Нагрузка на сервис", icon = Icons.Default.Refresh) {
                 Text(
                     "Темп запросов задаёте вы. Если сервис ответит 429, приложение само замедлится и подождёт.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -100,19 +127,19 @@ fun SettingsScreen(onBack: () -> Unit) {
                     vm.update { it.copy(retries = v.toInt()) }
                 }
             }
-            SectionCard("Подсети") {
+            SectionCard("Подсети", icon = Icons.Default.List) {
                 SwitchRow("Исключать адрес сети и broadcast по умолчанию", s.excludeEdges) { b -> vm.update { it.copy(excludeEdges = b) } }
                 SwitchRow("Пропускать динамику для частных адресов", s.skipDynamicForNonPublic) { b -> vm.update { it.copy(skipDynamicForNonPublic = b) } }
             }
-            SectionCard("Экспорт") {
+            SectionCard("Экспорт", icon = Icons.Default.Info) {
                 SwitchRow("Включать исходные ответы сервиса в JSON", s.exportRaw) { b -> vm.update { it.copy(exportRaw = b) } }
                 Text("CSV и TXT содержат сводку и метки времени; полные исходные ответы только в JSON.", style = MaterialTheme.typography.bodySmall)
             }
-            SectionCard("Данные") {
-                OutlinedButton(onClick = { confirmClear = true }) { Text("Очистить историю") }
+            SectionCard("Данные", icon = Icons.Default.Delete) {
+                OutlinedButton(onClick = { confirmClear = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Очистить историю") }
                 Text("Активное сканирование не удаляется.", style = MaterialTheme.typography.bodySmall)
             }
-            SectionCard("Сервис Cheburcheck") {
+            SectionCard("Сервис Cheburcheck", icon = Icons.Default.Info) {
                 when (val sv = service) {
                     ServiceState.Loading -> Text("Загрузка…")
                     is ServiceState.Failed -> Text("Недоступен: ${sv.message}", color = MaterialTheme.colorScheme.error)
@@ -125,7 +152,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
                 TextButton(onClick = vm::refresh) { Text("Обновить") }
             }
-            SectionCard("О приложении") {
+            SectionCard("О приложении", icon = Icons.Default.Info) {
                 KeyValue("Версия", BuildConfig.VERSION_NAME)
                 Text(
                     "БлокСкан — неофициальный клиент. Данные предоставляет сторонний сервис Cheburcheck (cheburcheck.ru). " +
@@ -153,7 +180,7 @@ private fun SliderRow(label: String, value: String, current: Float, range: Close
     Column {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(label, style = MaterialTheme.typography.bodyMedium)
-            Text(value, style = MaterialTheme.typography.labelMedium)
+            Text(value, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
         Slider(value = current.coerceIn(range), onValueChange = onChange, valueRange = range, steps = steps)
     }

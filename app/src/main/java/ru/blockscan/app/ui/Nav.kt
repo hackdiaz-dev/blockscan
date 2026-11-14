@@ -1,6 +1,11 @@
 package ru.blockscan.app.ui
 
 import android.net.Uri
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.navigation.NavType
@@ -14,7 +19,14 @@ import ru.blockscan.app.domain.HistoryKind
 fun AppNav() {
     val nav = rememberNavController()
     val back = remember { { nav.popBackStack(); Unit } }
-    NavHost(navController = nav, startDestination = "home") {
+    NavHost(
+        navController = nav,
+        startDestination = "home",
+        enterTransition = { fadeIn(tween(220)) + slideInHorizontally(tween(260)) { it / 10 } },
+        exitTransition = { fadeOut(tween(160)) },
+        popEnterTransition = { fadeIn(tween(220)) },
+        popExitTransition = { fadeOut(tween(160)) + slideOutHorizontally(tween(220)) { it / 10 } },
+    ) {
         composable("home") {
             HomeScreen(
                 onCheck = { nav.navigate("check/${Uri.encode(it)}") },

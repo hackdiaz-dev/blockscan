@@ -5,17 +5,20 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
@@ -68,11 +71,12 @@ private fun SetupPanel(vm: ScanViewModel) {
     val ok = plan as? PlanResult.Ok
     val count = ok?.set?.count ?: 0L
     val cfg = vm.settings
-    val dynamicAll = !(vm.looksPrivate() && cfg.skipDynamicForNonPublic)
+    val tokenOk = cfg.apiToken.isNotBlank()
+    val dynamicAll = tokenOk && !(vm.looksPrivate() && cfg.skipDynamicForNonPublic)
     val minSeconds = if (dynamicAll) count * 60L / cfg.probeStartsPerMinute else count * cfg.requestDelayMs / 1000L
 
     LazyColumn(
-        Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(bottom = 24.dp),
     ) {
         item {
@@ -83,41 +87,45 @@ private fun SetupPanel(vm: ScanViewModel) {
             )
         }
         item {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(RangeMode.entries.toList()) { m ->
-                    FilterChip(selected = s.mode == m, onClick = { vm.update { it.copy(mode = m) } }, label = { Text(m.ru) })
+            SectionCard("Что сканировать", icon = Icons.Default.Search) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(RangeMode.entries.toList()) { m ->
+                        FilterChip(selected = s.mode == m, onClick = { vm.update { it.copy(mode = m) } }, label = { Text(m.ru) })
+                    }
                 }
+                when (s.mode) {
+                    RangeMode.CIDR_ALL, RangeMode.CIDR_TRIM -> OutlinedTextField(
+                        value = s.input, onValueChange = { v -> vm.update { it.copy(input = v) } },
+                        label = { Text("Подсеть CIDR или IP") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    )
+                    RangeMode.RANGE -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = s.from, onValueChange = { v -> vm.update { it.copy(from = v) } },
+                            label = { Text("С IP") }, singleLine = true, modifier = Modifier.weight(1f),
+                            shape = MaterialTheme.shapes.large,
+                        )
+                        OutlinedTextField(
+                            value = s.to, onValueChange = { v -> vm.update { it.copy(to = v) } },
+                            label = { Text("По IP") }, singleLine = true, modifier = Modifier.weight(1f),
+                            shape = MaterialTheme.shapes.large,
+                        )
+                    }
+                    RangeMode.LIST -> OutlinedTextField(
+                        value = s.list, onValueChange = { v -> vm.update { it.copy(list = v) } },
+                        label = { Text("IP-адреса (по одному в строке)") }, minLines = 4, modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                    )
+                }
+                (plan as? PlanResult.Error)?.let { e -> Text(e.message, color = MaterialTheme.colorScheme.error) }
+                ok?.warnings?.forEach { w -> Text("• $w", style = MaterialTheme.typography.bodySmall) }
             }
         }
-        item {
-            when (s.mode) {
-                RangeMode.CIDR_ALL, RangeMode.CIDR_TRIM -> OutlinedTextField(
-                    value = s.input, onValueChange = { v -> vm.update { it.copy(input = v) } },
-                    label = { Text("Подсеть CIDR или IP") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                )
-                RangeMode.RANGE -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = s.from, onValueChange = { v -> vm.update { it.copy(from = v) } },
-                        label = { Text("С IP") }, singleLine = true, modifier = Modifier.weight(1f),
-                    )
-                    OutlinedTextField(
-                        value = s.to, onValueChange = { v -> vm.update { it.copy(to = v) } },
-                        label = { Text("По IP") }, singleLine = true, modifier = Modifier.weight(1f),
-                    )
-                }
-                RangeMode.LIST -> OutlinedTextField(
-                    value = s.list, onValueChange = { v -> vm.update { it.copy(list = v) } },
-                    label = { Text("IP-адреса (по одному в строке)") }, minLines = 4, modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-        (plan as? PlanResult.Error)?.let { e -> item { Text(e.message, color = MaterialTheme.colorScheme.error) } }
-        ok?.warnings?.forEach { w -> item { Text("• $w", style = MaterialTheme.typography.bodySmall) } }
 
         info?.let { i ->
             item {
-                SectionCard("Калькулятор подсети") {
+                SectionCard("Калькулятор подсети", icon = Icons.Default.Info) {
                     KeyValue("Адрес сети", i.network, mono = true)
                     KeyValue("Маска", i.mask, mono = true)
                     KeyValue("Broadcast", i.broadcast, mono = true)
@@ -130,23 +138,36 @@ private fun SetupPanel(vm: ScanViewModel) {
         }
         if (ok != null) {
             item {
-                SectionCard("План") {
+                SectionCard("План", icon = Icons.Default.PlayArrow) {
                     KeyValue("Адресов к проверке", count.toString())
                     KeyValue(
                         "Не менее",
                         Fmt.duration(minSeconds * 1000L) +
-                            if (dynamicAll) " (лимит ${cfg.probeStartsPerMinute} запусков сканеров в минуту)" else " (динамика пропускается)",
+                            if (dynamicAll) " (темп ${cfg.probeStartsPerMinute} запусков сканеров в минуту)" else " (сканеры не запускаются)",
                     )
-                    if (!dynamicAll) Text(
-                        "Частные и служебные адреса: по данным сторонних клиентов сервис не запускает для них сканеры, " +
-                            "поэтому будет только проверка по спискам. Отключить пропуск можно в настройках.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    if (!tokenOk) {
+                        Text(
+                            "API-токен не задан: будет только проверка по спискам. Токен вводится в настройках.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else if (!dynamicAll) {
+                        Text(
+                            "Частные и служебные адреса: по документации API сканеры их не поддерживают, " +
+                                "поэтому будет только проверка по спискам. Отключить пропуск можно в настройках.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
         item {
-            Button(onClick = { if (count > cfg.confirmThreshold) confirm = true else begin() }, enabled = ok != null, modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = { if (count > cfg.confirmThreshold) confirm = true else begin() },
+                enabled = ok != null,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
                 Text("Начать сканирование")
             }
         }
@@ -159,6 +180,7 @@ private fun SetupPanel(vm: ScanViewModel) {
             text = {
                 Text(
                     "Будет проверено $count адресов, это займёт не менее ${Fmt.duration(minSeconds * 1000L)}. " +
+                        (if (dynamicAll) "Запуски сканеров могут расходовать кредиты токена. " else "") +
                         "Сервис чужой: убедитесь, что нагрузка оправдана.",
                 )
             },
@@ -181,6 +203,7 @@ private fun JobPanel(jobId: Long, onNew: (() -> Unit)?, onOpenItem: (Long, Strin
     val exportMessage by vm.exportMessage.collectAsStateWithLifecycle()
     val j = job
     val mine = engine.jobId == jobId
+    val scheme = MaterialTheme.colorScheme
 
     var menu by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf(ExportFormat.CSV) }
@@ -195,63 +218,81 @@ private fun JobPanel(jobId: Long, onNew: (() -> Unit)?, onOpenItem: (Long, Strin
     }
 
     LazyColumn(
-        Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
+        Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(bottom = 24.dp),
     ) {
         item {
-            SectionCard("Прогресс") {
+            HeroCard(brush = Brush.linearGradient(listOf(scheme.primaryContainer, scheme.secondaryContainer))) {
                 if (j == null) {
-                    Text("Загрузка…")
+                    Text("Загрузка…", color = scheme.onPrimaryContainer)
                 } else {
-                    Text(j.input, style = MaterialTheme.typography.titleMedium, fontFamily = FontFamily.Monospace)
-                    KeyValue("Диапазон", j.rangeDesc)
-                    KeyValue("Всего IP", counts.total.toString())
                     val frac = if (counts.total == 0) 0f else counts.finished.toFloat() / counts.total
-                    LinearProgressIndicator(progress = { frac }, modifier = Modifier.fillMaxWidth())
+                    Text(j.input, style = MaterialTheme.typography.titleMedium, fontFamily = FontFamily.Monospace, color = scheme.onPrimaryContainer)
+                    Text("${(frac * 100).toInt()}%", style = MaterialTheme.typography.displaySmall, color = scheme.onPrimaryContainer)
+                    ThickProgress(frac)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (j.state == JobState.RUNNING) { ScanningPulse(); Spacer(Modifier.width(8.dp)) }
-                        Text("Проверено ${counts.finished} из ${counts.total} • " + stateText(j.state, mine, engine))
+                        Text(
+                            "Проверено ${counts.finished} из ${counts.total} • " + stateText(j.state, mine, engine),
+                            style = MaterialTheme.typography.bodyMedium, color = scheme.onPrimaryContainer,
+                        )
                     }
                     if (mine && engine.status == RunStatus.RUNNING) {
-                        engine.etaMs?.let { KeyValue("Осталось примерно", Fmt.duration(it)) }
+                        engine.etaMs?.let {
+                            Text("Осталось примерно ${Fmt.duration(it)}", style = MaterialTheme.typography.bodyMedium, color = scheme.onPrimaryContainer)
+                        }
                     }
-                    if (mine && engine.current.isNotEmpty()) KeyValue("Сейчас проверяются", engine.current.joinToString(", "), mono = true)
-                    KeyValue("Создано", Fmt.time(j.createdAt))
-                    j.finishedAt?.let { KeyValue("Закрыто", Fmt.time(it)) }
+                    if (mine && engine.current.isNotEmpty()) {
+                        Text(
+                            "Сейчас: " + engine.current.joinToString(", "),
+                            style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                            color = scheme.onPrimaryContainer.copy(alpha = 0.8f),
+                        )
+                    }
+                    Text(
+                        "Диапазон: ${j.rangeDesc} • создано ${Fmt.time(j.createdAt)}" + (j.finishedAt?.let { " • закрыто ${Fmt.time(it)}" } ?: ""),
+                        style = MaterialTheme.typography.bodySmall, color = scheme.onPrimaryContainer.copy(alpha = 0.8f),
+                    )
                 }
             }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 StatTile(counts.queued.toString(), "ожидает", Modifier.weight(1f))
-                StatTile(counts.running.toString(), "выполняется", Modifier.weight(1f))
-                StatTile(counts.blocked.toString(), "блокировок", Modifier.weight(1f))
-                StatTile(counts.errors.toString(), "ошибок", Modifier.weight(1f))
+                StatTile(counts.running.toString(), "выполняется", Modifier.weight(1f), accent = scheme.primary)
+                StatTile(counts.blocked.toString(), "блокировок", Modifier.weight(1f), accent = scheme.error)
+                StatTile(counts.errors.toString(), "ошибок", Modifier.weight(1f), accent = scheme.tertiary)
             }
         }
-        exportMessage?.let { message -> item { Text(message, color = if (message.startsWith("Ошибка")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) } }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                StatTile(counts.notBlocked.toString(), "не заблок.", Modifier.weight(1f))
-                StatTile(counts.partial.toString(), "частично", Modifier.weight(1f))
+                StatTile(counts.notBlocked.toString(), "не заблок.", Modifier.weight(1f), accent = scheme.primary)
+                StatTile(counts.partial.toString(), "частично", Modifier.weight(1f), accent = scheme.tertiary)
                 StatTile(counts.unknown.toString(), "неизвестно", Modifier.weight(1f))
             }
+        }
+        exportMessage?.let { message ->
+            item { Text(message, color = if (message.startsWith("Ошибка")) scheme.error else scheme.primary) }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 when (j?.state) {
                     JobState.RUNNING -> {
-                        FilledTonalButton(onClick = vm::pause, modifier = Modifier.weight(1f)) { Text("Пауза") }
-                        OutlinedButton(onClick = vm::stop, modifier = Modifier.weight(1f)) { Text("Остановить") }
+                        FilledTonalButton(onClick = vm::pause, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Пауза") }
+                        OutlinedButton(onClick = vm::stop, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Остановить") }
                     }
                     JobState.PAUSED -> {
-                        Button(onClick = vm::resume, modifier = Modifier.weight(1f)) { Text("Продолжить") }
-                        OutlinedButton(onClick = vm::stop, modifier = Modifier.weight(1f)) { Text("Остановить") }
+                        Button(onClick = vm::resume, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Продолжить")
+                        }
+                        OutlinedButton(onClick = vm::stop, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Остановить") }
                     }
-                    else -> if (onNew != null) Button(onClick = onNew, modifier = Modifier.weight(1f)) { Text("Новое сканирование") }
+                    else -> if (onNew != null) Button(onClick = onNew, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Новое сканирование") }
                 }
                 Box {
-                    OutlinedButton(onClick = { menu = true }) { Text("Экспорт") }
+                    OutlinedButton(onClick = { menu = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Экспорт") }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         ExportFormat.entries.forEach { f ->
                             DropdownMenuItem(text = { Text(f.ru) }, onClick = { menu = false; export(f) })
@@ -272,10 +313,11 @@ private fun JobPanel(jobId: Long, onNew: (() -> Unit)?, onOpenItem: (Long, Strin
                 OutlinedTextField(
                     value = search, onValueChange = { vm.search.value = it }, singleLine = true,
                     label = { Text("Поиск по IP") }, modifier = Modifier.weight(1f),
+                    shape = MaterialTheme.shapes.large,
                 )
                 var sm by remember { mutableStateOf(false) }
                 Box {
-                    OutlinedButton(onClick = { sm = true }) { Text(sort.ru) }
+                    FilledTonalButton(onClick = { sm = true }) { Text(sort.ru) }
                     DropdownMenu(expanded = sm, onDismissRequest = { sm = false }) {
                         ItemSort.entries.forEach { o -> DropdownMenuItem(text = { Text(o.ru) }, onClick = { sm = false; vm.sort.value = o }) }
                     }
@@ -299,28 +341,24 @@ private fun stateText(s: JobState, mine: Boolean, e: EngineState): String = when
 @Composable
 private fun ResultRow(row: ItemRow, onClick: () -> Unit) {
     val rec = row.record
-    Card(
-        Modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
-    ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(row.target, style = MaterialTheme.typography.titleMedium, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
-                when {
-                    row.overall != null -> OverallChip(row.overall, compact = true)
-                    row.state == ItemState.RUNNING -> Text("⟳ Выполняется", style = MaterialTheme.typography.labelMedium)
-                    else -> Text("· Ожидает", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+    val stripe = row.overall?.let { overallColors(it).second } ?: MaterialTheme.colorScheme.outlineVariant
+    StripeCard(stripe = stripe, onClick = onClick) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(row.target, style = MaterialTheme.typography.titleMedium, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+            when {
+                row.overall != null -> OverallChip(row.overall, compact = true)
+                row.state == ItemState.RUNNING -> Text("⟳ Выполняется", style = MaterialTheme.typography.labelMedium)
+                else -> Text("· Ожидает", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (rec != null) {
-                Text(
-                    "Статика: ${rec.staticStatus().ru} • Динамика: ${rec.dyn.ru}" +
-                        (if (row.state == ItemState.RUNNING && rec.probeRaw.isNotEmpty()) " (${rec.probeRaw.size})" else ""),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                rec.summary()?.let { sm ->
-                    if (rec.dyn == DynamicStatus.DONE) Text("Сканеры: ${sm.winner?.ru ?: "неясно"}, блок у ${sm.blockingProbes} из ${sm.totalProbes}", style = MaterialTheme.typography.bodySmall)
-                }
+        }
+        if (rec != null) {
+            Text(
+                "Статика: ${rec.staticStatus().ru} • Динамика: ${rec.dyn.ru}" +
+                    (if (row.state == ItemState.RUNNING && rec.probeRaw.isNotEmpty()) " (${rec.probeRaw.size})" else ""),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            rec.summary()?.let { sm ->
+                if (rec.dyn == DynamicStatus.DONE) Text("Сканеры: ${sm.winner?.ru ?: "неясно"}, блок у ${sm.blockingProbes} из ${sm.totalProbes}", style = MaterialTheme.typography.bodySmall)
             }
         }
     }

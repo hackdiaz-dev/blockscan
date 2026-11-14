@@ -20,6 +20,8 @@ data class AppSettings(
     val confirmThreshold: Int = 512,
     /** API-токен Cheburcheck для запуска сканеров. Хранится только на устройстве. */
     val apiToken: String = "",
+    /** Цвета из обоев (Material You), Android 12 и новее. */
+    val dynamicColor: Boolean = true,
 ) {
     /** Приводит значения к допустимым границам. */
     fun sanitized() = copy(
@@ -118,11 +120,11 @@ data class StaticResult(
 }
 
 enum class Verdict(val wire: String, val ru: String, val blocking: Boolean) {
-    TSPU_BLOCK("tspu_block", "ТСПУ-блок", true),
-    SNI_BLOCK("sni_block", "SNI-блок", true),
+    TSPU_BLOCK("tspu_block", "ТСПУ Блок", true),
+    SNI_BLOCK("sni_block", "SNI Блок", true),
     DNS_SPOOFING("dns_spoofing", "Подмена DNS", true),
     WHITELIST("whitelist", "Исключение для CDN", false),
-    CDN_BLOCK("cdn_block", "CDN-блок", true),
+    CDN_BLOCK("cdn_block", "CDN Блок", true),
     OK("ok", "Доступен", false),
     UNCERTAIN("uncertain", "Неясно", false);
 

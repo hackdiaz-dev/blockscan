@@ -27,6 +27,7 @@ class SettingsStore(context: Context) {
             .putBoolean("raw", n.exportRaw)
             .putInt("confirm", n.confirmThreshold)
             .putString("apiToken", n.apiToken)
+            .putBoolean("dynamic", n.dynamicColor)
             .apply()
         _flow.value = n
     }
@@ -45,6 +46,7 @@ class SettingsStore(context: Context) {
             exportRaw = prefs.getBoolean("raw", d.exportRaw),
             confirmThreshold = prefs.getInt("confirm", d.confirmThreshold),
             apiToken = prefs.getString("apiToken", d.apiToken) ?: d.apiToken,
+            dynamicColor = prefs.getBoolean("dynamic", d.dynamicColor),
         ).sanitized()
     }
 }

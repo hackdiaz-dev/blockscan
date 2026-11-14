@@ -5,9 +5,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -15,9 +18,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.blockscan.app.core.IpParser
@@ -38,7 +43,7 @@ fun CheckScreen(target: String, onBack: () -> Unit) {
     ) { pad ->
         LazyColumn(
             Modifier.padding(pad).padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(bottom = 24.dp),
         ) { checkBody(rec) }
     }
@@ -56,7 +61,7 @@ fun StoredRecordScreen(source: RecordSource, key: String, onBack: () -> Unit) {
         } else {
             LazyColumn(
                 Modifier.padding(pad).padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) { checkBody(r) }
         }
@@ -64,8 +69,9 @@ fun StoredRecordScreen(source: RecordSource, key: String, onBack: () -> Unit) {
 }
 
 private fun LazyListScope.checkBody(rec: CheckRecord) {
-    item(key = "regions") { RegionAvailabilityMap(rec) }
     item(key = "header") { HeaderCard(rec) }
+    item(key = "regions") { RegionAvailabilityMap(rec) }
+    item(key = "timing") { TimingCard(rec) }
     item(key = "static") { StaticCard(rec) }
     item(key = "dynamic") { DynamicCard(rec) }
     item(key = "probes") { ProbeListCard(rec) }
@@ -77,33 +83,39 @@ private fun HeaderCard(rec: CheckRecord) {
     val overall = remember(rec) { rec.overall() }
     val summary = remember(rec) { rec.summary() }
     val static = remember(rec.staticRaw) { rec.static() }
-    SectionCard("Итог") {
-        Text(rec.target, style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Monospace)
+    val (bg, fg) = overallColors(overall)
+    HeroCard(brush = Brush.verticalGradient(listOf(bg, bg.copy(alpha = 0.6f)))) {
+        Text(rec.target, style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Monospace, color = fg)
         OverallChip(overall)
         if (rec.staticStatus() != StaticStatus.ERROR && rec.staticStatus() != StaticStatus.PENDING) {
-            Text("Основание: ${rec.basis()}", style = MaterialTheme.typography.bodyMedium)
+            Text("Основание: ${rec.basis()}", style = MaterialTheme.typography.bodyMedium, color = fg)
         }
         if (summary != null && summary.blockingProbes > 0 && overall == Overall.COMPLETE) {
             Text(
                 "Внимание: блокировку увидели ${summary.blockingProbes} из ${summary.totalProbes} сканеров, " +
                     "хотя большинство показывает «${summary.winner?.ru}».",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium, color = fg, fontWeight = FontWeight.SemiBold,
             )
         }
         if (rec.dyn == DynamicStatus.DONE && static?.rknDomain != null && summary?.winner?.blocking == false) {
             Text(
                 "Домен найден в списках РКН, но большинство сканеров показывает доступность.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium, color = fg, fontWeight = FontWeight.SemiBold,
             )
         }
         if (rec.dyn != DynamicStatus.DONE && rec.staticStatus() != StaticStatus.ERROR) {
             Text(
                 "Результат динамической проверки не подтверждён: «${rec.dyn.ru}». " +
                     "Отсутствие в списках не означает, что адрес доступен.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall, color = fg.copy(alpha = 0.85f),
             )
         }
-        HorizontalDivider()
+    }
+}
+
+@Composable
+private fun TimingCard(rec: CheckRecord) {
+    SectionCard("Ход проверки", icon = Icons.Default.Info) {
         KeyValue("Проверка начата", Fmt.time(rec.startedAt))
         KeyValue("Статика получена", rec.staticAt?.let(Fmt::time))
         KeyValue("Ответы сканеров получены", rec.dynDoneAt?.let(Fmt::time))
@@ -114,7 +126,7 @@ private fun HeaderCard(rec: CheckRecord) {
 @Composable
 private fun StaticCard(rec: CheckRecord) {
     val st = remember(rec.staticRaw) { rec.static() }
-    SectionCard("Статическая проверка (списки)") {
+    SectionCard("Статическая проверка (списки)", icon = Icons.Default.List) {
         KeyValue("Статус", rec.staticStatus().ru)
         rec.staticError?.let { Text("Ошибка: $it", color = MaterialTheme.colorScheme.error) }
         if (st == null) return@SectionCard
@@ -175,12 +187,21 @@ private fun ComplaintsChart(values: List<Int>) {
     }
 }
 
+/** Названия исходов по хостам, как на сайте Cheburcheck; сырое значение остаётся в скобках. */
+private fun evidenceRu(type: String): String = when (type) {
+    "Good" -> "Успешно (Good)"
+    "DataTimeout" -> "Таймаут получения данных (DataTimeout)"
+    "ClientHello" -> "Блокировка после ClientHello"
+    "ConnectionError" -> "Ошибка подключения (ConnectionError)"
+    else -> type
+}
+
 @Composable
 private fun DynamicCard(rec: CheckRecord) {
     val summary = remember(rec.probeRaw.size, rec.staticRaw) { rec.summary() }
     val probes = remember(rec.probeRaw.size) { rec.probes() }
     var showDnsDetails by rememberSaveable(rec.target) { mutableStateOf(false) }
-    SectionCard("Динамическая проверка (сканеры)") {
+    SectionCard("Динамическая проверка (сканеры)", icon = Icons.Default.Search) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (rec.dyn == DynamicStatus.RUNNING || rec.dyn == DynamicStatus.QUEUED) {
                 ScanningPulse(); Spacer(Modifier.width(10.dp))
@@ -192,7 +213,7 @@ private fun DynamicCard(rec: CheckRecord) {
         if (rec.dyn == DynamicStatus.RUNNING || rec.dyn == DynamicStatus.PARTIAL || rec.dyn == DynamicStatus.DONE) {
             val online = rec.online
             if (online != null && online > 0 && rec.dyn != DynamicStatus.DONE) {
-                LinearProgressIndicator(progress = { (got.toFloat() / online).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                ThickProgress((got.toFloat() / online).coerceIn(0f, 1f))
             }
             KeyValue("Сканеров онлайн", online?.toString())
             KeyValue("Ответов получено", got.toString())
@@ -252,12 +273,19 @@ private fun DynamicCard(rec: CheckRecord) {
         val evidenceCounts = probes.flatMap { it.hostResults }.groupingBy { it.evidenceType ?: "(без типа)" }.eachCount()
         if (evidenceCounts.isNotEmpty()) {
             HorizontalDivider()
-            KeyValue("host_results по probe_evidence.type", evidenceCounts.entries
-                .sortedBy { it.key }.joinToString(", ") { "${it.key}: ${it.value}" })
+            KeyValue("Исходы по хостам", evidenceCounts.entries
+                .sortedBy { it.key }.joinToString(", ") { "${evidenceRu(it.key)}: ${it.value}" })
         }
         KeyValue("Динамика запущена", rec.dynStartedAt?.let(Fmt::time))
         if (rec.dyn == DynamicStatus.DONE && rec.dynStartedAt != null && rec.dynDoneAt != null) {
             KeyValue("Время ожидания сканеров", Fmt.duration(rec.dynDoneAt - rec.dynStartedAt))
+        }
+        if (summary != null) {
+            Text(
+                "Результат сканеров лучше воспринимать как сильный сигнал, а не как доказательство: " +
+                    "блокировки отличаются у разных операторов, в разных регионах и в разное время суток.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -268,9 +296,10 @@ private fun ProbeListCard(rec: CheckRecord) {
     if (probes.isEmpty()) return
     val isCdn = remember(rec.staticRaw) { rec.static()?.isCdn == true }
     var expanded by rememberSaveable { mutableStateOf(false) }
-    SectionCard("Ответы сканеров (${probes.size})") {
+    SectionCard("Ответы сканеров (${probes.size})", icon = Icons.Default.Warning) {
         val shown = if (expanded) probes else probes.take(8)
-        shown.forEach { p ->
+        shown.forEachIndexed { index, p ->
+            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             val top = VerdictLogic.top(p, isCdn)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) {
@@ -298,11 +327,11 @@ private fun ProbeListCard(rec: CheckRecord) {
 private fun RawCard(rec: CheckRecord) {
     val clip = LocalClipboardManager.current
     var shown by remember { mutableStateOf(false) }
-    SectionCard("Исходные ответы сервиса") {
+    SectionCard("Исходные ответы сервиса", icon = Icons.Default.Info) {
         Text("Сохраняются без изменений для диагностики.", style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { clip.setText(AnnotatedString(rec.staticRaw ?: "")) }, enabled = rec.staticRaw != null) { Text("Копировать check") }
-            OutlinedButton(
+            FilledTonalButton(onClick = { clip.setText(AnnotatedString(rec.staticRaw ?: "")) }, enabled = rec.staticRaw != null) { Text("Копировать check") }
+            FilledTonalButton(
                 onClick = { clip.setText(AnnotatedString(rec.probeRaw.joinToString("\n"))) },
                 enabled = rec.probeRaw.isNotEmpty(),
             ) { Text("Копировать probe") }

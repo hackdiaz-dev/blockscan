@@ -1,10 +1,12 @@
 package ru.blockscan.app.ui
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -17,12 +19,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -96,7 +107,7 @@ fun overallColors(o: Overall): Pair<Color, Color> {
 fun OverallChip(o: Overall, modifier: Modifier = Modifier, compact: Boolean = false) {
     val (bg, fg) = overallColors(o)
     Surface(color = bg, contentColor = fg, shape = RoundedCornerShape(50), modifier = modifier) {
-        Row(Modifier.padding(horizontal = 10.dp, vertical = if (compact) 3.dp else 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = if (compact) 3.dp else 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(o.glyph, style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.width(6.dp))
             Text(o.ru, style = MaterialTheme.typography.labelMedium)
@@ -104,15 +115,100 @@ fun OverallChip(o: Overall, modifier: Modifier = Modifier, compact: Boolean = fa
     }
 }
 
+/** Щит с галочкой, нарисованный кодом. */
 @Composable
-fun SectionCard(title: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun AppLogo(tint: Color, check: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val shield = Path().apply {
+            moveTo(w * 0.5f, h * 0.05f)
+            lineTo(w * 0.9f, h * 0.2f)
+            lineTo(w * 0.9f, h * 0.5f)
+            cubicTo(w * 0.9f, h * 0.76f, w * 0.7f, h * 0.9f, w * 0.5f, h * 0.96f)
+            cubicTo(w * 0.3f, h * 0.9f, w * 0.1f, h * 0.76f, w * 0.1f, h * 0.5f)
+            lineTo(w * 0.1f, h * 0.2f)
+            close()
+        }
+        drawPath(shield, tint)
+        val tick = Path().apply {
+            moveTo(w * 0.31f, h * 0.5f)
+            lineTo(w * 0.45f, h * 0.64f)
+            lineTo(w * 0.7f, h * 0.36f)
+        }
+        drawPath(tick, check, style = Stroke(width = w * 0.09f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    }
+}
+
+/** Крупная карточка с градиентом: главный акцент экрана. */
+@Composable
+fun HeroCard(brush: Brush, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        Column(
+            Modifier.background(brush).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            content = content,
+        )
+    }
+}
+
+/** Карточка с цветной полосой слева: цвет повторяет статус результата. */
+@Composable
+fun StripeCard(
+    stripe: Color,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    val body: @Composable ColumnScope.() -> Unit = {
+        Row(Modifier.height(IntrinsicSize.Min)) {
+            Box(Modifier.width(5.dp).fillMaxHeight().background(stripe))
+            Column(
+                Modifier.weight(1f).padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                content = content,
+            )
+        }
+    }
+    if (onClick != null) {
+        ElevatedCard(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, colors = colors, content = body)
+    } else {
+        ElevatedCard(modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, colors = colors, content = body)
+    }
+}
+
+@Composable
+fun SectionCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    ElevatedCard(
+        modifier = modifier.fillMaxWidth().animateContentSize(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+    ) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (icon != null) {
+                    Box(
+                        Modifier.size(32.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                }
+                Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            }
             content()
         }
     }
@@ -131,14 +227,18 @@ fun KeyValue(key: String, value: String?, mono: Boolean = false) {
 }
 
 @Composable
-fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier, shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-    ) {
-        Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, style = MaterialTheme.typography.headlineSmall)
-            Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+fun StatTile(value: String, label: String, modifier: Modifier = Modifier, accent: Color? = null) {
+    val container = accent?.copy(alpha = 0.14f) ?: MaterialTheme.colorScheme.surfaceContainerHigh
+    Surface(modifier = modifier, shape = MaterialTheme.shapes.medium, color = container, tonalElevation = 1.dp) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(value, style = MaterialTheme.typography.headlineSmall, color = accent ?: MaterialTheme.colorScheme.onSurface)
+            Text(
+                label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center, maxLines = 2,
+            )
         }
     }
 }
@@ -165,6 +265,16 @@ fun ScanningPulse(modifier: Modifier = Modifier) {
     Box(modifier.size(14.dp).scale(s).alpha(a).background(MaterialTheme.colorScheme.primary, CircleShape))
 }
 
+/** Толстая скруглённая полоса прогресса. */
+@Composable
+fun ThickProgress(progress: Float, modifier: Modifier = Modifier) {
+    LinearProgressIndicator(
+        progress = { progress.coerceIn(0f, 1f) },
+        modifier = modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)),
+        trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
+    )
+}
+
 @Composable
 fun AppScaffold(
     title: String,
@@ -172,17 +282,23 @@ fun AppScaffold(
     actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
 ) {
+    val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = { Text(title) },
+            LargeTopAppBar(
+                title = { Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
                     if (onBack != null) IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 },
                 actions = actions,
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                scrollBehavior = scroll,
+                colors = TopAppBarDefaults.largeTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                ),
             )
         },
         containerColor = MaterialTheme.colorScheme.background,
