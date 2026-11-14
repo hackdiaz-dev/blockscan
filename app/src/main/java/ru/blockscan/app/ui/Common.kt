@@ -146,11 +146,11 @@ fun HeroCard(brush: Brush, modifier: Modifier = Modifier, content: @Composable C
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         Column(
-            Modifier.background(brush).padding(20.dp),
+            Modifier.fillMaxWidth().background(brush).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
             content = content,
         )
