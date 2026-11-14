@@ -22,6 +22,8 @@ data class AppSettings(
     val apiToken: String = "",
     /** Цвета из обоев (Material You), Android 12 и новее. */
     val dynamicColor: Boolean = true,
+    /** Проверять обновления на GitHub при запуске приложения. */
+    val autoUpdateCheck: Boolean = true,
 ) {
     /** Приводит значения к допустимым границам. */
     fun sanitized() = copy(

@@ -28,6 +28,7 @@ class SettingsStore(context: Context) {
             .putInt("confirm", n.confirmThreshold)
             .putString("apiToken", n.apiToken)
             .putBoolean("dynamic", n.dynamicColor)
+            .putBoolean("autoUpd", n.autoUpdateCheck)
             .apply()
         _flow.value = n
     }
@@ -47,6 +48,7 @@ class SettingsStore(context: Context) {
             confirmThreshold = prefs.getInt("confirm", d.confirmThreshold),
             apiToken = prefs.getString("apiToken", d.apiToken) ?: d.apiToken,
             dynamicColor = prefs.getBoolean("dynamic", d.dynamicColor),
+            autoUpdateCheck = prefs.getBoolean("autoUpd", d.autoUpdateCheck),
         ).sanitized()
     }
 }

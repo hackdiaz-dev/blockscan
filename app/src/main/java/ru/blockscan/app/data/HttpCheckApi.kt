@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-/** Клиент публичного API cheburcheck.ru. Единственный хост, с которым работает приложение. */
+/** Клиент публичного API cheburcheck.ru. */
 class HttpCheckApi(
     private val baseUrl: String = "https://cheburcheck.ru",
     client: OkHttpClient = OkHttpClient(),

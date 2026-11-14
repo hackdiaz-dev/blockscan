@@ -54,6 +54,7 @@ fun HomeScreen(
             Modifier.padding(pad).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            UpdateBanner(onClick = onSettings)
             HeroCard(brush = Brush.linearGradient(listOf(scheme.primaryContainer, scheme.secondaryContainer))) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(

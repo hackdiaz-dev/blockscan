@@ -152,14 +152,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
                 TextButton(onClick = vm::refresh) { Text("Обновить") }
             }
-            SectionCard("О приложении", icon = Icons.Default.Info) {
-                KeyValue("Версия", BuildConfig.VERSION_NAME)
-                Text(
-                    "БлокСкан — неофициальный клиент. Данные предоставляет сторонний сервис Cheburcheck (cheburcheck.ru). " +
-                        "Приложение обращается только к этому хосту.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+            AboutCard(autoCheck = s.autoUpdateCheck, onAutoCheck = { b -> vm.update { it.copy(autoUpdateCheck = b) } })
             Spacer(Modifier.height(24.dp))
         }
     }
