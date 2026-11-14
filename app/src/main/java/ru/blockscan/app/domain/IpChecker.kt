@@ -41,6 +41,7 @@ class IpChecker(
             try {
                 return block()
             } catch (e: ApiException) {
+                if (e.kind == ApiException.Kind.RATE_LIMITED) limiter.onRateLimited()
                 if (!e.retriable || attempt >= cfg.retries) throw e
                 attempt++
                 val backoff = if (e.kind == ApiException.Kind.RATE_LIMITED) 20_000L * attempt else backoffMs(attempt)
@@ -84,7 +85,7 @@ class IpChecker(
             )
             ip != null && cfg.skipDynamicForNonPublic && IpClassifier.isNonPublic(ip) -> rec.copy(
                 dyn = DynamicStatus.UNAVAILABLE,
-                dynNote = "Частный или служебный адрес: по данным сторонних клиентов сервис не запускает для него " +
+                dynNote = "Частный или служебный адрес: по документации API сканеры не поддерживают такие адреса, поэтому сервис не запускает для них " +
                     "динамическую проверку (можно отключить в настройках)",
             )
             requireToken && cfg.apiToken.isBlank() -> rec.copy(
@@ -175,6 +176,7 @@ class IpChecker(
             val rateLimited = (e is End.Server && e.code == 429) ||
                 (e is End.Api && e.ex.kind == ApiException.Kind.RATE_LIMITED)
             val retryAfter = (e as? End.Api)?.ex?.retryAfterMs
+            if (rateLimited) limiter.onRateLimited()
             val reason = reasonOf(e, cfg)
 
             if (got > 0 || e is End.Malformed) {

@@ -81,22 +81,22 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
             SectionCard("Нагрузка на сервис") {
                 Text(
-                    "Значения ограничены безопасными пределами: приложение не позволяет превысить лимиты сервиса.",
+                    "Темп запросов задаёте вы. Если сервис ответит 429, приложение само замедлится и подождёт.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                SliderRow("Интервал между запросами", "${s.requestDelayMs} мс", s.requestDelayMs.toFloat(), 300f..5000f, 46) { v ->
+                SliderRow("Интервал между запросами", "${s.requestDelayMs} мс", s.requestDelayMs.toFloat(), 0f..5000f, 49) { v ->
                     vm.update { it.copy(requestDelayMs = (v / 100).toInt() * 100L) }
                 }
-                SliderRow("Параллельных проверок", "${s.concurrency}", s.concurrency.toFloat(), 1f..3f, 1) { v ->
+                SliderRow("Параллельных проверок", "${s.concurrency}", s.concurrency.toFloat(), 1f..8f, 6) { v ->
                     vm.update { it.copy(concurrency = v.toInt()) }
                 }
-                SliderRow("Запусков сканеров в минуту", "${s.probeStartsPerMinute}", s.probeStartsPerMinute.toFloat(), 1f..5f, 3) { v ->
+                SliderRow("Запусков сканеров в минуту", "${s.probeStartsPerMinute}", s.probeStartsPerMinute.toFloat(), 1f..60f, 58) { v ->
                     vm.update { it.copy(probeStartsPerMinute = v.toInt()) }
                 }
                 SliderRow("Таймаут ожидания сканеров", "${s.probeTimeoutSec} с", s.probeTimeoutSec.toFloat(), 20f..300f, 27) { v ->
                     vm.update { it.copy(probeTimeoutSec = (v / 10).toInt() * 10) }
                 }
-                SliderRow("Повторных попыток", "${s.retries}", s.retries.toFloat(), 0f..6f, 5) { v ->
+                SliderRow("Повторных попыток", "${s.retries}", s.retries.toFloat(), 0f..10f, 9) { v ->
                     vm.update { it.copy(retries = v.toInt()) }
                 }
             }

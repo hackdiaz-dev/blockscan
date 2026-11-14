@@ -12,8 +12,8 @@ data class AppSettings(
     /** Максимальное ожидание ответов сканеров для одного IP. */
     val probeTimeoutSec: Int = 90,
     val retries: Int = 3,
-    /** Запусков динамической проверки в минуту (сервис, по данным сторонних клиентов, пускает 5). */
-    val probeStartsPerMinute: Int = 4,
+    /** Темп запусков сканеров в минуту: настройка приложения; после ответа 429 темп снижается автоматически. */
+    val probeStartsPerMinute: Int = 10,
     val excludeEdges: Boolean = false,
     val skipDynamicForNonPublic: Boolean = true,
     val exportRaw: Boolean = true,
@@ -21,13 +21,13 @@ data class AppSettings(
     /** API-токен Cheburcheck для запуска сканеров. Хранится только на устройстве. */
     val apiToken: String = "",
 ) {
-    /** Пределы защищают сервис: настройки не позволяют превысить его лимиты. */
+    /** Приводит значения к допустимым границам. */
     fun sanitized() = copy(
-        requestDelayMs = requestDelayMs.coerceIn(300L, 60_000L),
-        concurrency = concurrency.coerceIn(1, 3),
+        requestDelayMs = requestDelayMs.coerceIn(0L, 60_000L),
+        concurrency = concurrency.coerceIn(1, 16),
         probeTimeoutSec = probeTimeoutSec.coerceIn(20, 300),
-        retries = retries.coerceIn(0, 6),
-        probeStartsPerMinute = probeStartsPerMinute.coerceIn(1, 5),
+        retries = retries.coerceIn(0, 10),
+        probeStartsPerMinute = probeStartsPerMinute.coerceIn(1, 600),
         confirmThreshold = confirmThreshold.coerceIn(16, 65_536),
         apiToken = apiToken.trim(),
     )
