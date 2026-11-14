@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/hackdiaz-dev/blockscan/compare/v1.1.0...v1.2.0) (2026-11-14)
+
+
+### Новое
+
+* поддержка API-токена Cheburcheck для запуска сканеров ([02a3c79](https://github.com/hackdiaz-dev/blockscan/commit/02a3c791a121fd07af3836528857b54dcd7bda54))
+
 ## [1.1.0](https://github.com/hackdiaz-dev/blockscan/compare/v1.0.1...v1.1.0) (2026-11-05)
 
 
