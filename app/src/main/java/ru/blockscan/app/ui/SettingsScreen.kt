@@ -47,7 +47,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Text(
                     "Нужен для запуска сканеров (динамическая проверка). Без токена работает проверка по спискам. " +
                         "Токен хранится только на этом устройстве и отправляется только на cheburcheck.ru. " +
-                        "Запуски сканеров могут расходовать кредиты токена. Токен выдаёт администратор сервиса по заявке.",
+                        "Токен выдаёт администратор сервиса по заявке.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedTextField(
@@ -69,8 +69,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                         tokenStatus = "Проверка…"
                         scope.launch {
                             tokenStatus = try {
-                                val n = (appContext as App).container.api.credits()
-                                "Токен принят. Кредитов: $n"
+                                (appContext as App).container.api.credits()
+                                "Токен принят"
                             } catch (e: ApiException) {
                                 if (e.httpCode == 401) "Токен не принят (401)" else "Токен сохранён, проверить не удалось: ${IpChecker.describe(e)}"
                             }

@@ -180,7 +180,6 @@ private fun SetupPanel(vm: ScanViewModel) {
             text = {
                 Text(
                     "Будет проверено $count адресов, это займёт не менее ${Fmt.duration(minSeconds * 1000L)}. " +
-                        (if (dynamicAll) "Запуски сканеров могут расходовать кредиты токена. " else "") +
                         "Сервис чужой: убедитесь, что нагрузка оправдана.",
                 )
             },
